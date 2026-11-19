@@ -1,4 +1,5 @@
-import type { Categoria, Comparto, FormaTipo } from '../data/tipi';
+import type { Categoria, Comparto, FormaTipo, TipoFile } from '../data/tipi';
+export type { TipoFile } from '../data/tipi';
 
 /**
  * Importazione di una tabella COVIP (XLSX/CSV) scelta dall'utente.
@@ -9,7 +10,6 @@ export type Cella = string | number | boolean | Date | null | undefined;
 export type Riga = Cella[];
 
 export type Campo = 'societa' | 'fondo' | 'comparto' | 'categoria' | 'y1' | 'y2' | 'y3' | 'y5' | 'y10' | 'y20' | 'y35';
-export type TipoFile = 'isc' | 'rend';
 export type Abbinamento = Partial<Record<Campo, number>>;
 
 export const CAMPI_ANAGRAFICA: { campo: Campo; nome: string }[] = [
@@ -136,4 +136,11 @@ export function unisci(esistenti: Comparto[], nuovi: Comparto[], tipo: TipoFile)
       });
   }
   return [...mappa.values()];
+}
+
+/** Toglie da una forma i dati di un tipo (costi o rendimenti); i comparti rimasti senza alcun dato vengono eliminati. */
+export function rimuoviSlot(comparti: Comparto[], forma: FormaTipo, tipo: TipoFile): Comparto[] {
+  return comparti
+    .map((c) => (c.forma !== forma ? c : { ...c, ...(tipo === 'isc' ? { isc: {} } : { rend: {} }) }))
+    .filter((c) => c.forma !== forma || Object.keys(c.isc).length > 0 || Object.keys(c.rend).length > 0);
 }

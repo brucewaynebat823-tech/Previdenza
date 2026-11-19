@@ -1,54 +1,73 @@
 import { useState } from 'react';
 import { useCovip } from './data/useCovip';
-import { BannerCovip, Avviso } from './components/Avvisi';
+import { Avviso } from './components/Avvisi';
 import { Confronto } from './components/Confronto';
 import { Combinata } from './components/Combinata';
 import { Preventivo } from './components/Preventivo';
-import { Importa } from './components/Importa';
+import { Dati } from './components/Dati';
+import { FORME_ALTRE, FORME_TUTTE, type FormaTipo } from './data/tipi';
 
 const SCHEDE = [
-  { id: 'pip', nome: 'Costi PIP' },
-  { id: 'altre', nome: 'Costi altre forme' },
-  { id: 'rend', nome: 'Rendimenti' },
-  { id: 'comb', nome: 'ISC + Rend.' },
-  { id: 'prev', nome: 'Preventivo' },
+  { id: 'costi', nome: 'Costi', icona: '💶', titolo: 'Confronto costi (ISC)' },
+  { id: 'rend', nome: 'Rendimenti', icona: '📈', titolo: 'Confronto rendimenti' },
+  { id: 'comb', nome: 'Costi + Rend.', icona: '⚖️', titolo: 'Costi e rendimenti insieme' },
+  { id: 'prev', nome: 'Preventivo', icona: '🧮', titolo: 'Preventivo Alleata Previdenza' },
+  { id: 'dati', nome: 'Dati', icona: '📂', titolo: 'Dati COVIP' },
 ] as const;
 type Scheda = (typeof SCHEDE)[number]['id'];
 
+type Gruppo = 'pip' | 'altre' | 'tutte';
+const GRUPPI: Record<Gruppo, { nome: string; forme: FormaTipo[] }> = {
+  pip: { nome: 'PIP', forme: ['PIP'] },
+  altre: { nome: 'Altre forme', forme: FORME_ALTRE },
+  tutte: { nome: 'Tutte', forme: FORME_TUTTE },
+};
+
+function Scelta({ valore, opzioni, onCambia }: { valore: Gruppo; opzioni: Gruppo[]; onCambia: (g: Gruppo) => void }) {
+  return (
+    <div className="seg grande" role="group" aria-label="Forme pensionistiche">
+      {opzioni.map((g) => (
+        <button key={g} className={valore === g ? 'on' : ''} onClick={() => onCambia(g)}>{GRUPPI[g].nome}</button>
+      ))}
+    </div>
+  );
+}
+
 export function App() {
-  const [scheda, setScheda] = useState<Scheda>('pip');
-  const { dati, stato, esito, ricarica, sostituisci, azzera } = useCovip();
-  const [importa, setImporta] = useState(false);
+  const [scheda, setScheda] = useState<Scheda>('costi');
+  const [gCosti, setGCosti] = useState<Gruppo>('pip');
+  const [gRend, setGRend] = useState<Gruppo>('pip');
+  const { dati, avviso, importa, rimuovi, azzera } = useCovip();
+  const vaiAiDati = () => setScheda('dati');
+  const corrente = SCHEDE.find((s) => s.id === scheda)!;
+
   return (
     <div className="app">
       <header>
-        <h1>Previdenza</h1>
-        <button className="aggiorna" onClick={() => setImporta(true)}>
-          Aggiorna dati
-        </button>
+        <h1>{corrente.titolo}</h1>
       </header>
       <main>
-        <BannerCovip dati={dati} />
-        {esito && (
-          <p className="nota">
-            {esito}{' '}
-            {dati.comparti.length > 0 && (
-              <button className="link" onClick={() => confirm('Cancellare i dati COVIP importati su questo dispositivo?') && azzera()}>Cancella dati importati</button>
-            )}
-            {stato === 'errore' && <button className="link" onClick={() => void ricarica()}>Riprova</button>}
-          </p>
+        {scheda === 'costi' && (
+          <>
+            <Scelta valore={gCosti} opzioni={['pip', 'altre']} onCambia={setGCosti} />
+            <Confronto key={'costi' + gCosti} dati={dati} forme={GRUPPI[gCosti].forme} modo="isc" vaiAiDati={vaiAiDati} />
+          </>
         )}
-        {scheda === 'pip' && <Confronto key="pip" dati={dati} forme={['PIP']} modo="isc" />}
-        {scheda === 'altre' && <Confronto key="altre" dati={dati} forme={['FPN', 'FPA', 'PREESISTENTE']} modo="isc" />}
-        {scheda === 'rend' && <Confronto key="rend" dati={dati} forme={['PIP', 'FPN', 'FPA', 'PREESISTENTE']} modo="rend" />}
-        {scheda === 'comb' && <Combinata dati={dati} />}
+        {scheda === 'rend' && (
+          <>
+            <Scelta valore={gRend} opzioni={['pip', 'altre', 'tutte']} onCambia={setGRend} />
+            <Confronto key={'rend' + gRend} dati={dati} forme={GRUPPI[gRend].forme} modo="rend" vaiAiDati={vaiAiDati} />
+          </>
+        )}
+        {scheda === 'comb' && <Combinata dati={dati} vaiAiDati={vaiAiDati} />}
         {scheda === 'prev' && <Preventivo dati={dati} />}
+        {scheda === 'dati' && <Dati dati={dati} avviso={avviso} onImporta={importa} onRimuovi={rimuovi} onAzzera={azzera} />}
         <Avviso />
-        {importa && <Importa dati={dati} onFatto={sostituisci} onChiudi={() => setImporta(false)} />}
       </main>
       <nav aria-label="Sezioni">
         {SCHEDE.map((s) => (
-          <button key={s.id} className={scheda === s.id ? 'on' : ''} onClick={() => setScheda(s.id)}>
+          <button key={s.id} className={scheda === s.id ? 'on' : ''} onClick={() => setScheda(s.id)} aria-current={scheda === s.id ? 'page' : undefined}>
+            <span className="ico" aria-hidden="true">{s.icona}</span>
             {s.nome}
           </button>
         ))}

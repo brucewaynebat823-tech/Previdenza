@@ -1,79 +1,65 @@
-import { useCallback, useEffect, useState } from 'react';
-import { DATASET_VUOTO, type DatasetCovip } from './tipi';
+import { useCallback, useState } from 'react';
+import { DATASET_VUOTO, chiaveFile, type DatasetCovip, type FileMeta, type FormaTipo, type TipoFile } from './tipi';
+import { rimuoviSlot, unisci } from '../lib/importa';
+import type { Comparto } from './tipi';
 
-const CHIAVE = 'previdenza.covip.v1';
+const CHIAVE = 'previdenza.covip.v2';
 
-export function leggiSalvati(): DatasetCovip | null {
+function leggi(): DatasetCovip {
   try {
     const s = localStorage.getItem(CHIAVE);
-    return s ? (JSON.parse(s) as DatasetCovip) : null;
+    if (!s) return DATASET_VUOTO;
+    const d = JSON.parse(s) as DatasetCovip;
+    return { ...DATASET_VUOTO, ...d, file: d.file ?? {}, comparti: d.comparti ?? [] };
   } catch {
-    return null;
+    return DATASET_VUOTO;
   }
 }
-export function salvaDati(d: DatasetCovip): boolean {
+function scrivi(d: DatasetCovip): boolean {
   try {
-    localStorage.setItem(CHIAVE, JSON.stringify(d));
+    if (d.comparti.length === 0 && Object.keys(d.file).length === 0) localStorage.removeItem(CHIAVE);
+    else localStorage.setItem(CHIAVE, JSON.stringify(d));
     return true;
   } catch {
     return false;
   }
 }
-export function cancellaDati() {
-  try {
-    localStorage.removeItem(CHIAVE);
-  } catch {
-    /* niente */
-  }
-}
 
 /**
- * Dati COVIP: prima quelli importati dall'utente (salvati sul dispositivo),
- * altrimenti quelli pubblicati con l'app (public/data/covip.json). Nessun invio di dati.
+ * Dati COVIP caricati dall'utente: restano salvati sul dispositivo (nessun invio a server)
+ * e sono disponibili a ogni apertura dell'app, senza ricaricare i file.
  */
 export function useCovip() {
-  const [dati, setDati] = useState<DatasetCovip>(() => leggiSalvati() ?? DATASET_VUOTO);
-  const [stato, setStato] = useState<'caricamento' | 'ok' | 'errore'>('caricamento');
-  const [esito, setEsito] = useState('');
+  const [dati, setDati] = useState<DatasetCovip>(leggi);
+  const [avviso, setAvviso] = useState('');
 
-  const ricarica = useCallback(async () => {
-    setStato('caricamento');
-    const salvati = leggiSalvati();
-    if (salvati) {
-      setDati(salvati);
-      setStato('ok');
-      setEsito(`Dati importati: ${salvati.comparti.length} comparti.`);
-      return;
-    }
-    try {
-      const r = await fetch(`${import.meta.env.BASE_URL}data/covip.json?t=${Date.now()}`, { cache: 'no-store' });
-      if (!r.ok) throw new Error('HTTP ' + r.status);
-      const d = (await r.json()) as DatasetCovip;
-      setDati(d);
-      setStato('ok');
-      setEsito(d.comparti.length ? `Caricati ${d.comparti.length} comparti.` : 'Nessun dato COVIP ancora caricato: usa “Aggiorna dati”.');
-    } catch {
-      setStato('errore');
-      setEsito('Impossibile leggere i dati: controlla la connessione.');
-    }
-  }, []);
-
-  useEffect(() => {
-    void ricarica();
-  }, [ricarica]);
-
-  const sostituisci = useCallback((d: DatasetCovip) => {
-    const ok = salvaDati(d);
+  const applica = useCallback((d: DatasetCovip) => {
     setDati(d);
-    setStato('ok');
-    setEsito(ok ? `Dati importati: ${d.comparti.length} comparti.` : '⚠️ Dati caricati ma non salvabili su questo dispositivo: andranno persi alla chiusura.');
+    setAvviso(scrivi(d) ? '' : '⚠️ Dati caricati ma non salvabili su questo dispositivo: andranno persi alla chiusura.');
   }, []);
 
-  const azzera = useCallback(() => {
-    cancellaDati();
-    setDati(DATASET_VUOTO);
-    setEsito('Dati COVIP importati cancellati.');
-  }, []);
+  const importa = useCallback(
+    (forma: FormaTipo, tipo: TipoFile, nuovi: Comparto[], meta: Omit<FileMeta, 'forma' | 'tipo' | 'comparti' | 'caricatoIl'>) => {
+      const base = rimuoviSlot(dati.comparti, forma, tipo);
+      applica({
+        ...dati,
+        comparti: unisci(base, nuovi, tipo),
+        file: { ...dati.file, [chiaveFile(forma, tipo)]: { ...meta, forma, tipo, comparti: nuovi.length, caricatoIl: new Date().toISOString().slice(0, 10) } },
+      });
+    },
+    [dati, applica],
+  );
 
-  return { dati, stato, esito, ricarica, sostituisci, azzera };
+  const rimuovi = useCallback(
+    (forma: FormaTipo, tipo: TipoFile) => {
+      const file = { ...dati.file };
+      delete file[chiaveFile(forma, tipo)];
+      applica({ ...dati, comparti: rimuoviSlot(dati.comparti, forma, tipo), file });
+    },
+    [dati, applica],
+  );
+
+  const azzera = useCallback(() => applica(DATASET_VUOTO), [applica]);
+
+  return { dati, avviso, importa, rimuovi, azzera };
 }

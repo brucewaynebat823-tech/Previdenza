@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { rilevaIntestazione, suggerisci, numeroCella, categoriaDaTesto, costruisci, unisci, type Riga } from './importa';
+import { rilevaIntestazione, suggerisci, numeroCella, categoriaDaTesto, costruisci, unisci, rimuoviSlot, type Riga } from './importa';
 
 // Tabella SINTETICA usata solo per testare la logica (non sono dati COVIP).
 const tab: Riga[] = [
@@ -43,5 +43,16 @@ describe('import', () => {
     const u = unisci(isc, rend, 'rend');
     expect(u).toHaveLength(2);
     expect(u.find((c) => c.societa === 'Alfa')).toMatchObject({ isc: { 2: 1.5 }, rend: { 3: 1.1, 5: 2.2 }, categoria: 'GAR' });
+  });
+  it('rimuoviSlot toglie solo il tipo richiesto e solo per la forma indicata', () => {
+    const isc = costruisci(tab, 2, suggerisci(tab[2], 'isc'), 'isc', 'PIP').comparti;
+    const rt: Riga[] = [['Società', 'Forma pensionistica', 'Comparto', 'Rendimento 3 anni'], ['Alfa', 'Piano A', 'Linea Garantita', '1,1']];
+    const u = unisci(isc, costruisci(rt, 0, suggerisci(rt[0], 'rend'), 'rend', 'PIP').comparti, 'rend');
+    const senzaIsc = rimuoviSlot(u, 'PIP', 'isc');
+    expect(senzaIsc).toHaveLength(1);
+    expect(senzaIsc[0].rend[3]).toBe(1.1);
+    expect(senzaIsc[0].isc).toEqual({});
+    expect(rimuoviSlot(u, 'FPN', 'isc')).toHaveLength(2);
+    expect(rimuoviSlot(rimuoviSlot(u, 'PIP', 'isc'), 'PIP', 'rend')).toHaveLength(0);
   });
 });
