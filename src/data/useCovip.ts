@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { chiaveFile, type Comparto, type FileMeta, type FormaTipo, type Slots, type TipoFile } from './tipi';
+import { chiaveFile, type Comparto, type ElencoPreesistenti, type FileMeta, type FormaTipo, type Slots, type TipoFile } from './tipi';
 import { costruisciDataset } from './slot';
 
 const CHIAVE = 'previdenza.covip.v3';
@@ -28,6 +28,7 @@ function scrivi(d: Slots): boolean {
  */
 export function useCovip() {
   const [incorporati, setIncorporati] = useState<Slots>({});
+  const [preesistenti, setPreesistenti] = useState<ElencoPreesistenti | undefined>(undefined);
   const [utente, setUtente] = useState<Slots>(leggi);
   const [avviso, setAvviso] = useState('');
 
@@ -35,8 +36,10 @@ export function useCovip() {
     let attivo = true;
     fetch(`${import.meta.env.BASE_URL}data/covip.json`)
       .then((r) => (r.ok ? r.json() : null))
-      .then((j: { slot?: Slots } | null) => {
-        if (attivo && j?.slot) setIncorporati(j.slot);
+      .then((j: { slot?: Slots; preesistenti?: ElencoPreesistenti } | null) => {
+        if (!attivo) return;
+        if (j?.slot) setIncorporati(j.slot);
+        if (j?.preesistenti) setPreesistenti(j.preesistenti);
       })
       .catch(() => undefined);
     return () => {
@@ -48,8 +51,8 @@ export function useCovip() {
     const tutti: Slots = {};
     for (const [k, f] of Object.entries(incorporati)) tutti[k] = { ...f, meta: { ...f.meta, origine: 'incorporato' } };
     for (const [k, f] of Object.entries(utente)) tutti[k] = { ...f, meta: { ...f.meta, origine: 'utente' } };
-    return costruisciDataset(tutti);
-  }, [incorporati, utente]);
+    return { ...costruisciDataset(tutti), preesistenti };
+  }, [incorporati, utente, preesistenti]);
 
   const applica = useCallback((u: Slots) => {
     setUtente(u);

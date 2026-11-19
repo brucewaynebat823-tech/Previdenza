@@ -45,12 +45,25 @@ export interface FileCaricato {
 }
 export type Slots = Record<string, FileCaricato>;
 
+/** Fondo preesistente con il link alla sua scheda dei costi (il file COVIP non contiene l'ISC numerico). */
+export interface SchedaFondo {
+  albo: number;
+  nome: string;
+  link: string;
+}
+export interface ElencoPreesistenti {
+  nomeFile: string;
+  fondi: SchedaFondo[];
+}
+
 export interface DatasetCovip {
   fonte: string;
   urlFonte: string;
   comparti: Comparto[];
   /** Chiave: `${forma}:${tipo}`. */
   file: Record<string, FileMeta>;
+  /** Elenco dei fondi preesistenti con i link alle schede dei costi (senza valori numerici). */
+  preesistenti?: ElencoPreesistenti;
 }
 
 export const chiaveFile = (forma: FormaTipo, tipo: TipoFile) => `${forma}:${tipo}`;

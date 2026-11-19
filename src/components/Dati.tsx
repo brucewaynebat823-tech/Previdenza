@@ -62,7 +62,16 @@ export function Dati({ dati, avviso, onImporta, onRimuovi, onAzzera, haDatiUtent
       {FORME_TUTTE.map((f) => (
         <section className="card" key={f}>
           <h3>{NOME_FORMA[f]}{f === 'PREESISTENTE' ? ' (se disponibili)' : ''}</h3>
-          {slot(f, 'isc')}
+          {f === 'PREESISTENTE' && dati.preesistenti ? (
+            <div className="slot pieno">
+              <div>
+                <b>Costi</b>
+                <small>✓ Elenco di {dati.preesistenti.fondi.length} fondi con link alle schede dei costi (nessun valore numerico) · incluso nell’app</small>
+              </div>
+            </div>
+          ) : (
+            slot(f, 'isc')
+          )}
           {slot(f, 'rend')}
         </section>
       ))}
