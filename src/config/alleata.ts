@@ -35,6 +35,11 @@ export const ALLEATA = {
     /** Addizionali regionali/comunali: PARAMS_ANNO.add = 2,53 (%) uguale su tutti gli scaglioni. */
     addizionale: 0.0253,
   },
+  /**
+   * "Percorso per età" della pagina (funzione investmentPlanningRate): linea Azionaria sotto i 50 anni,
+   * Bilanciata da 50 a 59, Garantita da 60 in poi. Ogni anno si usa il rendimento della linea corrispondente all'età.
+   */
+  percorsoEta: { sogliaBilanciata: 50, sogliaGarantita: 60 },
   /** La pagina stima la rendita come capitale netto ÷ 20 (nessun coefficiente di conversione). */
   anniRendita: 20,
   /** Con regime forfettario la pagina azzera imposta finale e risparmio fiscale. */
@@ -43,9 +48,17 @@ export const ALLEATA = {
 
 /** Note mostrate accanto ai parametri da non considerare confermati. */
 export const DA_VERIFICARE: string[] = [
+  'Percorso per età (Azionaria <50 anni, Bilanciata 50–59, Garantita da 60): ricavato dal codice della pagina Alleata, non da documentazione.',
   'Limite di deducibilità € 5.300 (L. 199/2025): citato dalla pagina Alleata, non verificato sulla norma.',
   'Rendita stimata = capitale netto ÷ 20: semplificazione della pagina, non è un calcolo attuariale.',
   'Reddito lordo ricavato dal netto con le sole aliquote IRPEF e addizionale (senza contributi INPS né detrazioni), come fa la pagina.',
   'Scaglioni IRPEF 2026 e addizionale 2,53%: ripresi dalla pagina, non verificati.',
   'Clausola di salvaguardia e costi del trasferimento: la pagina non contiene regole di calcolo.',
 ];
+
+/**
+ * Scelte di prudenza dell'APP (non regole della pagina Alleata):
+ * oltre questo numero di anni di versamenti, per proiettare i rendimenti si può usare solo il periodo storico
+ * COVIP più lungo disponibile, per non estendere a lungo termine medie di pochi anni.
+ */
+export const PRUDENZA = { orizzonteOltreCuiSoloStoricoLungo: 10 } as const;
