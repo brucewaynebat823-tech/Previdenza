@@ -67,6 +67,9 @@ describe('regole di base', () => {
     expect(validaInput({}).length).toBeGreaterThan(0);
     const ok = validaInput({ eta: 40, etaPensione: 67, premioAnnuo: 1000, redditoLordo: 30000, rendimentoPct: 3, annoAdesione: 2026 });
     expect(ok).toEqual([]);
+    const base2 = { eta: 40, etaPensione: 67, premioAnnuo: 1000, redditoLordo: 30000, rendimentoPct: 3, annoCorrente: 2026 };
+    expect(validaInput({ ...base2, annoAdesione: 2026 })).toEqual([]);
+    expect(validaInput({ ...base2, annoAdesione: 2029 })).toContain("L'anno di prima adesione non può essere successivo all'anno in corso.");
     expect(validaInput({ eta: 60, etaPensione: 55, premioAnnuo: 1000, redditoLordo: 30000, rendimentoPct: 3, annoAdesione: 2026 })).toContain("L'età di pensione deve essere maggiore dell'età attuale.");
   });
 });
