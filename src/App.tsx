@@ -50,13 +50,13 @@ export function App() {
         {scheda === 'costi' && (
           <>
             <Scelta valore={gCosti} opzioni={['pip', 'altre']} onCambia={setGCosti} />
-            <Confronto key={'costi' + gCosti} dati={dati} forme={GRUPPI[gCosti].forme} modo="isc" vaiAiDati={vaiAiDati} />
+            <Confronto key={'costi' + gCosti} dati={dati} forme={GRUPPI[gCosti].forme} confrontabili={gCosti === 'altre' ? FORME_TUTTE : undefined} modo="isc" vaiAiDati={vaiAiDati} />
           </>
         )}
         {scheda === 'rend' && (
           <>
             <Scelta valore={gRend} opzioni={['pip', 'altre', 'tutte']} onCambia={setGRend} />
-            <Confronto key={'rend' + gRend} dati={dati} forme={GRUPPI[gRend].forme} modo="rend" vaiAiDati={vaiAiDati} />
+            <Confronto key={'rend' + gRend} dati={dati} forme={GRUPPI[gRend].forme} confrontabili={gRend === 'altre' ? FORME_TUTTE : undefined} modo="rend" vaiAiDati={vaiAiDati} />
           </>
         )}
         {scheda === 'comb' && <Combinata dati={dati} vaiAiDati={vaiAiDati} />}

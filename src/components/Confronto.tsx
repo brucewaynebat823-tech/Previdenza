@@ -14,6 +14,14 @@ const SPIEGAZIONE = {
   rend: 'Rendimento medio annuo composto, al netto dei costi e della tassazione, su 1, 3, 5, 10 o 20 anni. È un dato storico, non una previsione.',
 };
 
+/** Tipo di fondo come lo si dice di solito: i fondi negoziali sono i fondi "chiusi". */
+export const NOME_TIPO: Record<FormaTipo, string> = {
+  PIP: 'PIP',
+  FPN: 'Fondo negoziale (chiuso)',
+  FPA: 'Fondo aperto',
+  PREESISTENTE: 'Fondo preesistente',
+};
+
 export function CatBadge({ cat }: { cat: Categoria | null }) {
   const c = catInfo(cat);
   return (
@@ -26,11 +34,13 @@ export function CatBadge({ cat }: { cat: Categoria | null }) {
 interface Props {
   dati: DatasetCovip;
   forme: FormaTipo[];
+  /** Forme da cui si possono scegliere i fondi per il confronto affiancato (di norma le stesse di `forme`; in "Altre forme" anche i PIP). */
+  confrontabili?: FormaTipo[];
   modo: 'isc' | 'rend';
   vaiAiDati: () => void;
 }
 
-export function Confronto({ dati, forme, modo, vaiAiDati }: Props) {
+export function Confronto({ dati, forme, confrontabili, modo, vaiAiDati }: Props) {
   const lista = useMemo(
     () => dati.comparti.filter((c) => forme.includes(c.forma) && Object.keys(modo === 'isc' ? c.isc : c.rend).length > 0),
     [dati, forme, modo],
@@ -45,6 +55,13 @@ export function Confronto({ dati, forme, modo, vaiAiDati }: Props) {
   const [legenda, setLegenda] = useState(false);
   const [scelti, setScelti] = useState<string[]>([]);
   const [cerca, setCerca] = useState('');
+  const [formaScelta, setFormaScelta] = useState<FormaTipo | ''>('');
+  const formeConfr = confrontabili ?? forme;
+  const listaConfr = useMemo(
+    () => dati.comparti.filter((c) => formeConfr.includes(c.forma) && Object.keys(modo === 'isc' ? c.isc : c.rend).length > 0),
+    [dati, formeConfr, modo], // eslint-disable-line react-hooks/exhaustive-deps
+  );
+  const candidati = useMemo(() => (formaScelta ? listaConfr.filter((c) => c.forma === formaScelta) : listaConfr), [listaConfr, formaScelta]);
 
   const metrica = { tipo: modo, anni } as Metrica;
   const societaElenco = useMemo(() => [...new Set(lista.map((c) => c.societa))].filter(Boolean).sort(), [lista]);
@@ -63,7 +80,7 @@ export function Confronto({ dati, forme, modo, vaiAiDati }: Props) {
   );
   const conteggi = useMemo(() => Object.fromEntries(CATEGORIE.map((k) => [k.id, base.filter((c) => (c.categoria ?? 'ND') === k.id).length])), [base]);
   const alleata = lista.filter(isAlleata);
-  const confronto = scelti.map((id) => lista.find((c) => c.id === id)).filter((c): c is Comparto => !!c);
+  const confronto = scelti.map((id) => listaConfr.find((c) => c.id === id)).filter((c): c is Comparto => !!c);
   const etichetta = modo === 'isc' ? 'ISC' : 'Rend. netto';
   const anniOpz = modo === 'isc' ? ANNI_ISC : ANNI_REND;
   const periodi = forme.map((f) => ({ f, m: dati.file[chiaveFile(f, 'rend')] })).filter((x) => x.m?.periodi || x.m?.periodo);
@@ -73,9 +90,9 @@ export function Confronto({ dati, forme, modo, vaiAiDati }: Props) {
   const suggerimenti = useMemo(() => {
     const t = cerca.trim().toLowerCase();
     if (!t) return [];
-    return lista.filter((c) => !scelti.includes(c.id) && `${c.societa} ${c.fondo} ${c.comparto}`.toLowerCase().includes(t)).slice(0, 8);
-  }, [cerca, lista, scelti]);
-  const elencoCompleto = useMemo(() => [...lista].sort((a, b) => `${a.societa} ${a.comparto}`.localeCompare(`${b.societa} ${b.comparto}`, 'it')), [lista]);
+    return candidati.filter((c) => !scelti.includes(c.id) && `${c.societa} ${c.fondo} ${c.comparto}`.toLowerCase().includes(t)).slice(0, 8);
+  }, [cerca, candidati, scelti]);
+  const elencoCompleto = useMemo(() => [...candidati].sort((a, b) => `${a.societa} ${a.comparto}`.localeCompare(`${b.societa} ${b.comparto}`, 'it')), [candidati]);
   const aggiungi = (id: string) => {
     if (id && !scelti.includes(id) && scelti.length < MAX) setScelti([...scelti, id]);
     setCerca('');
@@ -158,11 +175,11 @@ export function Confronto({ dati, forme, modo, vaiAiDati }: Props) {
         <div className="filtri">
           {forme.length > 1 && (
             <label className="campo">
-              <span>Forma pensionistica</span>
-              <select value={forma} onChange={(e) => setForma(e.target.value as FormaTipo | '')} aria-label="Forma pensionistica">
-                <option value="">Tutte</option>
+              <span>Tipo di fondo</span>
+              <select value={forma} onChange={(e) => setForma(e.target.value as FormaTipo | '')} aria-label="Tipo di fondo">
+                <option value="">Tutti</option>
                 {forme.map((f) => (
-                  <option key={f} value={f}>{NOME_FORMA[f]}</option>
+                  <option key={f} value={f}>{NOME_TIPO[f]}</option>
                 ))}
               </select>
             </label>
@@ -218,7 +235,21 @@ export function Confronto({ dati, forme, modo, vaiAiDati }: Props) {
 
       <section className="card">
         <h3>Scegli i fondi da confrontare</h3>
-        <p className="nota">Cerca per nome o scegli dall’elenco (massimo {MAX}). Vale su tutti i comparti disponibili, indipendentemente dai filtri.</p>
+        <p className="nota">
+          Cerca per nome o scegli dall’elenco (massimo {MAX}). Vale su tutti i comparti disponibili, indipendentemente dai filtri.
+          {formeConfr.length > forme.length ? ' Puoi aggiungere anche un PIP, per confrontarlo con le altre forme.' : ''}
+        </p>
+        {formeConfr.length > 1 && (
+          <label className="campo">
+            <span>Tipo di fondo da aggiungere</span>
+            <select value={formaScelta} onChange={(e) => setFormaScelta(e.target.value as FormaTipo | '')} aria-label="Tipo di fondo da aggiungere">
+              <option value="">Tutti i tipi ({listaConfr.length})</option>
+              {formeConfr.map((f) => (
+                <option key={f} value={f} disabled={!listaConfr.some((c) => c.forma === f)}>{NOME_TIPO[f]} ({listaConfr.filter((c) => c.forma === f).length})</option>
+              ))}
+            </select>
+          </label>
+        )}
         <input type="search" placeholder="Cerca un fondo o una società…" value={cerca} onChange={(e) => setCerca(e.target.value)} aria-label="Cerca fondo da confrontare" disabled={scelti.length >= MAX} />
         {suggerimenti.length > 0 && (
           <ul className="suggerimenti">
@@ -259,13 +290,14 @@ export function Confronto({ dati, forme, modo, vaiAiDati }: Props) {
               <div key={c.id} className={'colonna' + (isAlleata(c) ? ' alleata' : '')}>
                 <b>{c.comparto}</b>
                 <small>{c.societa}</small>
+                <small><b>{NOME_TIPO[c.forma]}</b></small>
                 <CatBadge cat={c.categoria} />
                 <div className="grande">
                   <small>{etichetta} · {anni} {anni === 1 ? 'anno' : 'anni'}</small>
                   <b>{pct(valore(c, metrica))}</b>
                   {(() => {
-                    const d = scostoDallaMedia(c, lista, metrica);
-                    return <small>{d === null ? 'vs media tipologia: —' : `vs media tipologia: ${d > 0 ? '+' : ''}${d.toFixed(2).replace('.', ',')} pt`}</small>;
+                    const d = scostoDallaMedia(c, listaConfr.filter((x) => x.forma === c.forma), metrica);
+                    return <small>{d === null ? 'vs media tipologia: —' : `vs media tipologia (${NOME_TIPO[c.forma]}): ${d > 0 ? '+' : ''}${d.toFixed(2).replace('.', ',')} pt`}</small>;
                   })()}
                 </div>
               </div>
