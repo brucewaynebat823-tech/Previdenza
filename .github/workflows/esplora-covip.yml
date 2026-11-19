@@ -1,0 +1,17 @@
+name: Esplora dati COVIP (temporaneo)
+on:
+  push:
+    branches: [ccr-2e0451f7-ecs6c1]
+    paths: [".github/workflows/esplora-covip.yml", "scripts/esplora-covip.py"]
+  workflow_dispatch:
+jobs:
+  esplora:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - run: pip install openpyxl
+      - run: python scripts/esplora-covip.py
+      - uses: actions/upload-artifact@v4
+        with: { name: covip-esplora, path: esplora/, if-no-files-found: ignore }
