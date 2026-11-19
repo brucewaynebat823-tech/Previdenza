@@ -49,15 +49,19 @@ export function Combinata({ dati, vaiAiDati }: { dati: DatasetCovip; vaiAiDati: 
       {banner}
       <section className="card">
         <p className="nota">Ogni punto è un comparto: a sinistra costa meno (ISC), in alto rende di più (storico, non previsione).</p>
-        <div className="seg">
-          {([2, 5, 10, 35] as const).map((a) => (
-            <button key={a} className={anniIsc === a ? 'on' : ''} onClick={() => setAnniIsc(a)}>ISC {a}a</button>
-          ))}
-        </div>
-        <div className="seg">
-          {([1, 3, 5, 10, 20] as const).map((a) => (
-            <button key={a} className={anniRend === a ? 'on' : ''} onClick={() => setAnniRend(a)}>Rend. {a}a</button>
-          ))}
+        <div className="filtri">
+          <label className="campo">
+            <span>Costi (ISC) a</span>
+            <select value={anniIsc} onChange={(e) => setAnniIsc(Number(e.target.value) as 2 | 5 | 10 | 35)}>
+              {([2, 5, 10, 35] as const).map((a) => <option key={a} value={a}>{a} anni</option>)}
+            </select>
+          </label>
+          <label className="campo">
+            <span>Rendimento a</span>
+            <select value={anniRend} onChange={(e) => setAnniRend(Number(e.target.value) as 1 | 3 | 5 | 10 | 20)}>
+              {([1, 3, 5, 10, 20] as const).map((a) => <option key={a} value={a}>{a} {a === 1 ? 'anno' : 'anni'}</option>)}
+            </select>
+          </label>
         </div>
         <div className="filtri">
           <select value={forma} onChange={(e) => setForma(e.target.value as FormaTipo | '')} aria-label="Forma">

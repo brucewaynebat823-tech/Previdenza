@@ -128,29 +128,24 @@ export function Confronto({ dati, forme, modo, vaiAiDati }: Props) {
               : '⚠️ Periodo di riferimento non indicato.'}
           </p>
         )}
-        <h4>Orizzonte</h4>
-        <div className="seg" role="group" aria-label="Anni">
-          {anniOpz.map((a) => (
-            <button key={a} className={anni === a ? 'on' : ''} onClick={() => setAnni(a)}>
-              {a} anni
-            </button>
-          ))}
-        </div>
-        <h4>Tipologia di fondo</h4>
-        <div className="chips scorri" role="group" aria-label="Tipologia">
-          <button className={'chipcat' + (cat === '' ? ' on' : '')} onClick={() => setCat('')}>
-            Tutte <small>{base.length}</small>
-          </button>
-          {CATEGORIE.filter((k) => conteggi[k.id] > 0).map((k) => (
-            <button
-              key={k.id}
-              className={'chipcat' + (cat === k.id ? ' on' : '')}
-              style={{ ['--c' as string]: k.colore, ['--s' as string]: k.sfondo }}
-              onClick={() => setCat(cat === k.id ? '' : k.id)}
-            >
-              {k.nome} <small>{conteggi[k.id]}</small>
-            </button>
-          ))}
+        <div className="filtri">
+          <label className="campo">
+            <span>Orizzonte (anni di {modo === 'isc' ? 'permanenza' : 'rendimento'})</span>
+            <select value={anni} onChange={(e) => setAnni(Number(e.target.value))} aria-label="Orizzonte in anni">
+              {anniOpz.map((a) => (
+                <option key={a} value={a}>{a} {a === 1 ? 'anno' : 'anni'}</option>
+              ))}
+            </select>
+          </label>
+          <label className="campo">
+            <span>Tipologia di fondo</span>
+            <select value={cat} onChange={(e) => setCat(e.target.value as Categoria | 'ND' | '')} aria-label="Tipologia di fondo">
+              <option value="">Tutte ({base.length})</option>
+              {CATEGORIE.filter((k) => conteggi[k.id] > 0).map((k) => (
+                <option key={k.id} value={k.id}>{k.nome} ({conteggi[k.id]})</option>
+              ))}
+            </select>
+          </label>
         </div>
         <button className="link" onClick={() => setLegenda(!legenda)}>{legenda ? 'Nascondi' : 'Cosa significano le tipologie?'}</button>
         {legenda && (
@@ -162,23 +157,36 @@ export function Confronto({ dati, forme, modo, vaiAiDati }: Props) {
         )}
         <div className="filtri">
           {forme.length > 1 && (
-            <select value={forma} onChange={(e) => setForma(e.target.value as FormaTipo | '')} aria-label="Forma pensionistica">
-              <option value="">Tutte le forme</option>
-              {forme.map((f) => (
-                <option key={f} value={f}>{NOME_FORMA[f]}</option>
+            <label className="campo">
+              <span>Forma pensionistica</span>
+              <select value={forma} onChange={(e) => setForma(e.target.value as FormaTipo | '')} aria-label="Forma pensionistica">
+                <option value="">Tutte</option>
+                {forme.map((f) => (
+                  <option key={f} value={f}>{NOME_FORMA[f]}</option>
+                ))}
+              </select>
+            </label>
+          )}
+          <label className="campo">
+            <span>Società</span>
+            <select value={societa} onChange={(e) => setSocieta(e.target.value)} aria-label="Società">
+              <option value="">Tutte</option>
+              {societaElenco.map((s) => (
+                <option key={s}>{s}</option>
               ))}
             </select>
-          )}
-          <select value={societa} onChange={(e) => setSocieta(e.target.value)} aria-label="Società">
-            <option value="">Tutte le società</option>
-            {societaElenco.map((s) => (
-              <option key={s}>{s}</option>
-            ))}
-          </select>
-          <input type="search" placeholder="Cerca per nome" value={testo} onChange={(e) => setTesto(e.target.value)} />
-          <button className="sec" onClick={() => setVerso(verso === 'asc' ? 'desc' : 'asc')}>
-            {verso === 'asc' ? '↑ Dal più basso' : '↓ Dal più alto'}
-          </button>
+          </label>
+          <label className="campo">
+            <span>Ordine</span>
+            <select value={verso} onChange={(e) => setVerso(e.target.value as 'asc' | 'desc')} aria-label="Ordine">
+              <option value="asc">Dal più basso al più alto</option>
+              <option value="desc">Dal più alto al più basso</option>
+            </select>
+          </label>
+          <label className="campo">
+            <span>Cerca</span>
+            <input type="search" placeholder="Nome fondo o società" value={testo} onChange={(e) => setTesto(e.target.value)} />
+          </label>
         </div>
         <label className="check piccolo">
           <input type="checkbox" checked={raggruppa} onChange={(e) => setRaggruppa(e.target.checked)} /> Raggruppa per tipologia
@@ -244,19 +252,22 @@ export function Confronto({ dati, forme, modo, vaiAiDati }: Props) {
 
       {confronto.length > 0 && (
         <section className="card">
-          <h3>Confronto affiancato</h3>
+          <h3>Confronto affiancato · {anni} {anni === 1 ? 'anno' : 'anni'}</h3>
+          <p className="nota">Cambia l’orizzonte dal menù in alto per vedere gli altri anni.</p>
           <div className="affianca" style={{ gridTemplateColumns: `repeat(${confronto.length}, minmax(0,1fr))` }}>
             {confronto.map((c) => (
               <div key={c.id} className={'colonna' + (isAlleata(c) ? ' alleata' : '')}>
                 <b>{c.comparto}</b>
                 <small>{c.societa}</small>
                 <CatBadge cat={c.categoria} />
-                {anniOpz.map((a) => (
-                  <div key={a} className="riga">
-                    <span>{a}a</span>
-                    <span>{pct(valore(c, { tipo: modo, anni: a } as Metrica))}</span>
-                  </div>
-                ))}
+                <div className="grande">
+                  <small>{etichetta} · {anni} {anni === 1 ? 'anno' : 'anni'}</small>
+                  <b>{pct(valore(c, metrica))}</b>
+                  {(() => {
+                    const d = scostoDallaMedia(c, lista, metrica);
+                    return <small>{d === null ? 'vs media tipologia: —' : `vs media tipologia: ${d > 0 ? '+' : ''}${d.toFixed(2).replace('.', ',')} pt`}</small>;
+                  })()}
+                </div>
               </div>
             ))}
           </div>
