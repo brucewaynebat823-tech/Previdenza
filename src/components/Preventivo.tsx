@@ -145,21 +145,31 @@ export function Preventivo({ dati }: { dati: DatasetCovip }) {
 
       <section className="card">
         <h3>2 · Fondo e rendimento</h3>
-        <div className="seg" role="group" aria-label="Fondo">
-          {([['g', 'Garantita'], ['b', 'Bilanciata'], ['a', 'Azionaria'], ['mix', 'Mix'], ['libera', 'Ipotesi libera']] as const).map(([k, l]) => (
-            <button key={k} className={s.fondo === k ? 'on' : ''} onClick={() => set('fondo', k)}>{l}</button>
-          ))}
-        </div>
+        <label className="campo">
+          <span>Fondo</span>
+          <select value={s.fondo} onChange={(e) => set('fondo', e.target.value as Fondo)} aria-label="Fondo">
+            <option value="">Scegli…</option>
+            <option value="g">Alleata Garantita</option>
+            <option value="b">Alleata Bilanciata</option>
+            <option value="a">Alleata Azionaria</option>
+            <option value="mix">Mix personalizzato</option>
+            <option value="libera">Ipotesi libera di rendimento</option>
+          </select>
+        </label>
         {s.fondo === 'libera' ? (
           <div className="griglia">{campo('libera', 'Rendimento annuo ipotizzato (%)', 'es. numero')}</div>
         ) : s.fondo ? (
           <>
             <p className="nota">Rendimento storico COVIP della linea Alleata (storico, non previsione): scegli il periodo.</p>
-            <div className="seg">
-              {(['3', '5', '10'] as const).map((p) => (
-                <button key={p} className={s.periodo === p ? 'on' : ''} onClick={() => set('periodo', p)}>{p} anni</button>
-              ))}
-            </div>
+            <label className="campo">
+              <span>Periodo storico del rendimento</span>
+              <select value={s.periodo} onChange={(e) => set('periodo', e.target.value as Stato['periodo'])} aria-label="Periodo storico">
+                <option value="">Scegli…</option>
+                <option value="3">Ultimi 3 anni</option>
+                <option value="5">Ultimi 5 anni</option>
+                <option value="10">Ultimi 10 anni</option>
+              </select>
+            </label>
             {s.fondo === 'mix' && (
               <div className="griglia tre">
                 {campo('mixG', 'Garantita %', '0-100')}
