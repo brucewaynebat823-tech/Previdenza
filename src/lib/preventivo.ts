@@ -79,6 +79,7 @@ export function validaInput(i: Partial<InputPreventivo>): string[] {
   if (!num(i.redditoLordo) || i.redditoLordo! <= 0 || i.redditoLordo! > 1000000) e.push('Reddito lordo: inserisci un importo tra 1 e 1.000.000 €.');
   if (!num(i.rendimentoPct) || i.rendimentoPct! < -10 || i.rendimentoPct! > 20) e.push('Rendimento annuo: inserisci un valore tra -10% e 20%.');
   if (!num(i.annoAdesione) || i.annoAdesione! < 1990 || i.annoAdesione! > 2100) e.push("Anno di adesione: inserisci un anno valido (da 1990).");
+  else if (num(i.annoCorrente) && i.annoAdesione! > i.annoCorrente!) e.push("L'anno di prima adesione non può essere successivo all'anno in corso.");
   return e;
 }
 

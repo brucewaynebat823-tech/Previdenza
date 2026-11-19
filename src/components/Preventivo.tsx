@@ -33,15 +33,28 @@ export function Preventivo({ dati }: { dati: DatasetCovip }) {
   }, [s]);
 
   const annoCorrente = new Date().getFullYear();
-  const tassi = useMemo(() => {
+  const tassiDi = (periodo: '' | '3' | '5' | '10') => {
     const r: Partial<Record<'g' | 'b' | 'a', number | null>> = {};
-    const p = s.periodo ? (Number(s.periodo) as 3 | 5 | 10) : null;
+    const p = periodo ? (Number(periodo) as 3 | 5 | 10) : null;
     for (const k of ['g', 'b', 'a'] as const) {
       const c = dati.comparti.find((x) => lineaAlleata(x) === k);
       r[k] = c && p ? valore(c, { tipo: 'rend', anni: p }) : null;
     }
     return r;
-  }, [dati, s.periodo]);
+  };
+  const tassi = useMemo(() => tassiDi(s.periodo), [dati, s.periodo]); // eslint-disable-line react-hooks/exhaustive-deps
+  /** Rendimento COVIP della scelta fatta (linea o mix) per un dato periodo; null se non disponibile. */
+  const rendPer = (periodo: '3' | '5' | '10'): number | null => {
+    const t = tassiDi(periodo);
+    if (s.fondo === 'g' || s.fondo === 'b' || s.fondo === 'a') return t[s.fondo] ?? null;
+    if (s.fondo === 'mix') {
+      const w = { g: numero(s.mixG) ?? 0, b: numero(s.mixB) ?? 0, a: numero(s.mixA) ?? 0 };
+      if ((['g', 'b', 'a'] as const).some((k) => w[k] > 0 && t[k] == null)) return null;
+      return (['g', 'b', 'a'] as const).reduce((tot, k) => tot + (w[k] / 100) * (t[k] ?? 0), 0);
+    }
+    return null;
+  };
+  const NOME_FONDO: Record<string, string> = { g: 'Alleata Garantita', b: 'Alleata Bilanciata', a: 'Alleata Azionaria', mix: 'Mix personalizzato', libera: 'Ipotesi libera' };
 
   const { input, errori } = useMemo(() => {
     const err: string[] = [];
@@ -109,12 +122,26 @@ export function Preventivo({ dati }: { dati: DatasetCovip }) {
       const pdf = new jsPDF({ unit: 'pt', format: 'a4' });
       const w = pdf.internal.pageSize.getWidth() - 40;
       const h = (cv.height * w) / cv.width;
-      pdf.addImage(cv.toDataURL('image/png'), 'PNG', 20, 20, w, Math.min(h, pdf.internal.pageSize.getHeight() - 40));
+      pdf.addImage(cv.toDataURL('image/jpeg', 0.9), 'JPEG', 20, 20, w, Math.min(h, pdf.internal.pageSize.getHeight() - 40));
       pdf.save('preventivo-stima.pdf');
     }
   }
 
   const rendimentoUsato = input?.rendimentoPct;
+  const sensibilita =
+    pronto && r && s.fondo !== 'libera'
+      ? (['3', '5', '10'] as const)
+          .map((p) => ({ p, rend: rendPer(p) }))
+          .filter((x): x is { p: '3' | '5' | '10'; rend: number } => x.rend !== null)
+          .map((x) => {
+            const q = calcolaPreventivo({ ...input, rendimentoPct: x.rend });
+            return { ...x, capitale: q.capitaleNetto, rendita: q.rendita };
+          })
+      : [];
+  const avvisoPeriodo =
+    pronto && r && s.fondo !== 'libera' && s.periodo && r.anni > 2 * Number(s.periodo)
+      ? `⚠️ Stai proiettando per ${r.anni} anni un rendimento medio degli ultimi ${s.periodo} anni: il risultato dipende molto dal periodo scelto e i rendimenti passati non garantiscono quelli futuri.`
+      : '';
   return (
     <>
       <section className="card">
@@ -212,6 +239,20 @@ export function Preventivo({ dati }: { dati: DatasetCovip }) {
         r && (
           <section className="card" ref={esito}>
             <h3>Risultato · <span className="etichetta">STIMA</span></h3>
+            <div className="riepilogo">
+              <b>Dati inseriti</b>
+              <span>Età {input.eta} → pensione a {input.etaPensione} anni ({r.anni} anni di versamenti)</span>
+              <span>Premio annuo {eur(input.premioAnnuo)} · prima adesione nel {input.annoAdesione}</span>
+              <span>
+                {s.autonomo ? 'Forfettario' : `Dipendente, netto ${numero(s.netto) ?? 0} €/mese × ${s.mensilita} mensilità`} → reddito lordo {eur(input.redditoLordo)}
+              </span>
+              <span>
+                {NOME_FONDO[s.fondo]}: rendimento {pct(rendimentoUsato)} l’anno
+                {s.fondo !== 'libera' && s.periodo ? ` (media COVIP ultimi ${s.periodo} anni${dati.file['PIP:rend']?.periodi?.[Number(s.periodo)] ? `, ${dati.file['PIP:rend'].periodi![Number(s.periodo)]}` : ''})` : ''}
+              </span>
+              {input.tfr && <span>Con TFR e contributi (datore {pct(input.tfr.contributoDatorePct)}, dipendente {pct(input.tfr.contributoDipendentePct)} della RAL)</span>}
+            </div>
+            {avvisoPeriodo && <p className="warn">{avvisoPeriodo}</p>}
             <div className="kpi"><span>Capitale finale netto</span><b>{eur(r.capitaleNetto)}</b></div>
             <div className="kpi"><span>Rendita annua stimata ⚠️</span><b>{eur(r.rendita)}</b><small>{eur(r.rendita / 12)} al mese · netto ÷ {ALLEATA.anniRendita}</small></div>
             <div className="kpi"><span>Premi versati ({r.anni} anni)</span><b>{eur(r.premiVersati)}</b></div>
@@ -225,6 +266,22 @@ export function Preventivo({ dati }: { dati: DatasetCovip }) {
               <span className="pallino" style={{ background: '#0b5fff' }} /> Versamenti al netto del risparmio fiscale {eur(r.premiNettiDelFisco)} ·{' '}
               <span className="pallino" style={{ background: '#f5a800' }} /> Rendimento {eur(r.rendimentoStimato)}
             </p>
+            {sensibilita.length > 1 && (
+              <>
+                <h4>Quanto cambia con il periodo storico scelto [Stima]</h4>
+                <table>
+                  <tbody>
+                    {sensibilita.map((x) => (
+                      <tr key={x.p} className={x.p === s.periodo ? 'alleata' : ''}>
+                        <td>Ultimi {x.p} anni ({pct(x.rend)})</td>
+                        <td className="n">{eur(x.capitale)}</td>
+                        <td className="n sub">{eur(x.rendita)}/anno</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </>
+            )}
             <h4>Ipotesi usate [Parametro del preventivo]</h4>
             <ul className="ipotesi">
               <li>Versione {ALLEATA.versione}, nessuna copertura; caricamento {pct(ALLEATA.caricamento * 100)} sui versamenti.</li>
