@@ -32,6 +32,12 @@ const casi: { nome: string; inp: InputPreventivo; atteso: Record<string, number>
     atteso: { capitaleLordo: 264617, capitaleNetto: 236094, rendita: 11805, premiVersati: 144028, risparmioFiscaleTotale: 21105, risparmioFiscaleAnnuo: 782 },
   },
   {
+    // Pagina Alleata con "autonomo" spuntato e "forfettario" no: stesso calcolo del dipendente senza TFR.
+    nome: 'autonomo (regime ordinario): risparmio fiscale come il dipendente',
+    inp: { ...base, forfettario: false, eta: 45, etaPensione: 67, premioAnnuo: 5000, redditoLordo: 30000, rendimentoPct: 3, annoAdesione: 2020 },
+    atteso: { capitaleLordo: 152546, capitaleNetto: 135614, rendita: 6781, premiVersati: 110000, risparmioFiscaleTotale: 32483, risparmioFiscaleAnnuo: 1477 },
+  },
+  {
     nome: 'forfettario, adesione 2020: nessuna imposta né risparmio fiscale',
     inp: { ...base, forfettario: true, eta: 45, etaPensione: 67, premioAnnuo: 5000, redditoLordo: 30000, rendimentoPct: 3, annoAdesione: 2020 },
     atteso: { capitaleLordo: 152546, capitaleNetto: 152546, rendita: 7627, premiVersati: 110000, risparmioFiscaleTotale: 0, risparmioFiscaleAnnuo: 0 },

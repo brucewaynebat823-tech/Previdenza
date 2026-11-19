@@ -48,6 +48,7 @@ export const ALLEATA = {
 
 /** Note mostrate accanto ai parametri da non considerare confermati. */
 export const DA_VERIFICARE: string[] = [
+  'Autonomo forfettario: nessun risparmio fiscale e nessuna imposta finale (regola della pagina Alleata). L’autonomo in regime ordinario ha lo stesso calcolo del dipendente, senza TFR.',
   'Percorso per età (Azionaria <50 anni, Bilanciata 50–59, Garantita da 60): ricavato dal codice della pagina Alleata, non da documentazione.',
   'Limite di deducibilità € 5.300 (L. 199/2025): citato dalla pagina Alleata, non verificato sulla norma.',
   'Rendita stimata = capitale netto ÷ 20: semplificazione della pagina, non è un calcolo attuariale.',

@@ -12,20 +12,27 @@ type Periodo = '3' | '5' | '10' | '20';
 const PERIODI: Periodo[] = ['3', '5', '10', '20'];
 interface Stato {
   eta: string; etaPensione: string; premio: string;
-  autonomo: boolean; netto: string; mensilita: '' | '13' | '14' | '15'; lordoForf: string;
+  tipo: '' | 'dip' | 'aut' | 'forf'; netto: string; mensilita: '' | '13' | '14' | '15'; lordoForf: string;
   fondo: Fondo; periodo: '' | Periodo; libera: string; mixG: string; mixB: string; mixA: string;
   annoAdesione: string;
   tfr: boolean; datore: string; datoreUnita: '%' | '€'; dip: string; dipUnita: '%' | '€';
   pre2006: string; dal2007: string; trasf: string;
 }
 const VUOTO: Stato = {
-  eta: '', etaPensione: '', premio: '', autonomo: false, netto: '', mensilita: '', lordoForf: '',
+  eta: '', etaPensione: '', premio: '', tipo: '', netto: '', mensilita: '', lordoForf: '',
   fondo: '', periodo: '', libera: '', mixG: '', mixB: '', mixA: '', annoAdesione: '',
   tfr: false, datore: '', datoreUnita: '%', dip: '', dipUnita: '%', pre2006: '', dal2007: '', trasf: '',
 };
 
 export function Preventivo({ dati }: { dati: DatasetCovip }) {
-  const [s, setS] = useState<Stato>(() => ({ ...VUOTO, ...(carica<Stato>() ?? {}) }));
+  const [s, setS] = useState<Stato>(() => {
+    const salvato: Partial<Stato> & { autonomo?: boolean } = carica<Partial<Stato> & { autonomo?: boolean }>() ?? {};
+    // Dati salvati da versioni precedenti: "autonomo" voleva dire forfettario.
+    const tipo = salvato.tipo ?? (salvato.autonomo === true ? 'forf' : salvato.autonomo === false && salvato.netto ? 'dip' : '');
+    return { ...VUOTO, ...salvato, tipo };
+  });
+  const autonomo = s.tipo === 'aut' || s.tipo === 'forf';
+  const forfettario = s.tipo === 'forf';
   const [vedi, setVedi] = useState(false);
   const esito = useRef<HTMLDivElement>(null);
   const set = <K extends keyof Stato>(k: K, v: Stato[K]) => setS((p) => ({ ...p, [k]: v }));
@@ -72,12 +79,13 @@ export function Preventivo({ dati }: { dati: DatasetCovip }) {
     const err: string[] = [];
     const num = (x: string) => numero(x);
     let rl: number | null = null;
-    if (s.autonomo) rl = num(s.lordoForf);
+    if (!s.tipo) err.push('Scegli il tipo di reddito: dipendente, autonomo o autonomo forfettario.');
+    if (autonomo) rl = num(s.lordoForf);
     else {
       const n = num(s.netto);
       if (n !== null && s.mensilita) rl = lordoDaNetto(n * Number(s.mensilita));
     }
-    if (rl === null) err.push(s.autonomo ? 'Inserisci il reddito lordo forfettario.' : 'Inserisci stipendio netto mensile e scegli le mensilità.');
+    if (rl === null && s.tipo) err.push(autonomo ? 'Inserisci il reddito lordo annuo.' : 'Inserisci stipendio netto mensile e scegli le mensilità.');
 
     let rend: Pick<InputPreventivo, 'rendimentoPct' | 'percorsoEta'> | null = null;
     if (!s.fondo) err.push('Scegli il fondo.');
@@ -98,9 +106,9 @@ export function Preventivo({ dati }: { dati: DatasetCovip }) {
     const conv = (v: string, u: '%' | '€') => (u === '%' ? num(v) ?? 0 : rlv > 0 ? ((num(v) ?? 0) * 12 * 100) / rlv : 0);
     const inp: Partial<InputPreventivo> = {
       eta: num(s.eta) ?? undefined, etaPensione: num(s.etaPensione) ?? undefined, premioAnnuo: num(s.premio) ?? undefined,
-      redditoLordo: rl ?? undefined, forfettario: s.autonomo, rendimentoPct: rend?.rendimentoPct, percorsoEta: rend?.percorsoEta,
+      redditoLordo: rl ?? undefined, forfettario, rendimentoPct: rend?.rendimentoPct, percorsoEta: rend?.percorsoEta,
       annoAdesione: num(s.annoAdesione) ?? undefined, annoCorrente,
-      tfr: s.tfr && !s.autonomo ? { contributoDatorePct: conv(s.datore, s.datoreUnita), contributoDipendentePct: conv(s.dip, s.dipUnita), tfrPregresso2006: num(s.pre2006) ?? 0, tfrPregressoDal2007: num(s.dal2007) ?? 0, trasferimento: num(s.trasf) ?? 0 } : undefined,
+      tfr: s.tfr && !autonomo ? { contributoDatorePct: conv(s.datore, s.datoreUnita), contributoDipendentePct: conv(s.dip, s.dipUnita), tfrPregresso2006: num(s.pre2006) ?? 0, tfrPregressoDal2007: num(s.dal2007) ?? 0, trasferimento: num(s.trasf) ?? 0 } : undefined,
     };
     const base = validaInput(inp).filter((m) => s.fondo === 'libera' || !m.startsWith('Rendimento annuo'));
     return { input: inp as InputPreventivo, errori: [...base, ...err] };
@@ -180,12 +188,15 @@ export function Preventivo({ dati }: { dati: DatasetCovip }) {
           {campo('annoAdesione', 'Anno di prima adesione a una forma pensionistica', 'es. anno')}
         </div>
         <div className="seg" role="group" aria-label="Tipo di reddito">
-          <button className={!s.autonomo ? 'on' : ''} onClick={() => set('autonomo', false)}>Dipendente</button>
-          <button className={s.autonomo ? 'on' : ''} onClick={() => set('autonomo', true)}>Autonomo forfettario</button>
+          <button className={s.tipo === 'dip' ? 'on' : ''} onClick={() => set('tipo', 'dip')}>Dipendente</button>
+          <button className={s.tipo === 'aut' ? 'on' : ''} onClick={() => set('tipo', 'aut')}>Autonomo</button>
+          <button className={s.tipo === 'forf' ? 'on' : ''} onClick={() => set('tipo', 'forf')}>Autonomo forfettario</button>
         </div>
-        {s.autonomo ? (
-          <div className="griglia">{campo('lordoForf', 'Reddito lordo annuo (€)', 'importo')}</div>
-        ) : (
+        {forfettario && <p className="nota">Regime forfettario: come nella pagina Alleata, nessun risparmio fiscale e nessuna imposta finale sulle prestazioni. ⚠️ DA VERIFICARE.</p>}
+        {s.tipo === 'aut' && <p className="nota">Autonomo in regime ordinario: il risparmio fiscale si calcola sul reddito che indichi, con l’IRPEF e l’addizionale della pagina Alleata (senza TFR).</p>}
+        {autonomo ? (
+          <div className="griglia">{campo('lordoForf', 'Reddito annuo lordo (€)', 'importo')}</div>
+        ) : s.tipo === 'dip' ? (
           <>
             <div className="griglia">{campo('netto', 'Stipendio netto mensile (€)', 'importo')}</div>
             <div className="seg" role="group" aria-label="Mensilità">
@@ -194,7 +205,7 @@ export function Preventivo({ dati }: { dati: DatasetCovip }) {
               ))}
             </div>
           </>
-        )}
+        ) : null}
       </section>
 
       <section className="card">
@@ -247,7 +258,7 @@ export function Preventivo({ dati }: { dati: DatasetCovip }) {
         ) : null}
       </section>
 
-      {!s.autonomo && (
+      {s.tipo === 'dip' && (
         <section className="card">
           <label className="check"><input type="checkbox" checked={s.tfr} onChange={(e) => set('tfr', e.target.checked)} /> Includi TFR e contributi del datore</label>
           {s.tfr && (
@@ -280,7 +291,7 @@ export function Preventivo({ dati }: { dati: DatasetCovip }) {
               <span>Età {input.eta} → pensione a {input.etaPensione} anni ({r.anni} anni di versamenti)</span>
               <span>Premio annuo {eur(input.premioAnnuo)} · prima adesione nel {input.annoAdesione}</span>
               <span>
-                {s.autonomo ? 'Forfettario' : `Dipendente, netto ${numero(s.netto) ?? 0} €/mese × ${s.mensilita} mensilità`} → reddito lordo {eur(input.redditoLordo)}
+                {s.tipo === 'forf' ? 'Autonomo forfettario' : s.tipo === 'aut' ? 'Autonomo' : `Dipendente, netto ${numero(s.netto) ?? 0} €/mese × ${s.mensilita} mensilità`} → reddito lordo {eur(input.redditoLordo)}
               </span>
               <span>
                 {NOME_FONDO[s.fondo]}: rendimento {s.fondo === 'eta' ? 'medio equivalente ' : ''}{pct(rendimentoUsato)} l’anno
@@ -344,7 +355,7 @@ export function Preventivo({ dati }: { dati: DatasetCovip }) {
                   : `Rendimento annuo ${pct(rendimentoUsato)} costante per ${r.anni} anni (${s.fondo === 'libera' ? 'ipotesi libera' : `${NOME_FONDO[s.fondo]}, media COVIP ultimi ${s.periodo} anni`}).`}
               </li>
               <li>Deducibilità fino a {eur(ALLEATA.maxDeducibile)}/anno · aliquota finale 15% con −0,30 pt/anno dopo il 15° anno, minimo 9%.</li>
-              <li>Reddito lordo {eur(input.redditoLordo)} {s.autonomo ? '(forfettario: nessuna imposta finale né risparmio fiscale)' : '(ricavato dal netto)'}.</li>
+              <li>Reddito lordo {eur(input.redditoLordo)} {forfettario ? '(forfettario: nessuna imposta finale né risparmio fiscale)' : autonomo ? '(reddito indicato)' : '(ricavato dal netto)'}.</li>
               <li>Fonte regole: pagina Alleata v{FONTE_ALLEATA.versionePagina}, letta il {FONTE_ALLEATA.dataLettura}.</li>
             </ul>
             <p className="avviso">{AVVISO_LEGALE}</p>
