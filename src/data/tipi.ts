@@ -1,6 +1,6 @@
 /** Modello neutro dei dati COVIP. L'importazione dei file ufficiali lo riempie; finché non ci sono file l'elenco è vuoto. */
 export type FormaTipo = 'PIP' | 'FPN' | 'FPA' | 'PREESISTENTE';
-export type Categoria = 'GAR' | 'OBB PURO' | 'OBB MISTO' | 'BIL' | 'AZN';
+export type Categoria = 'GAR' | 'OBB PURO' | 'OBB MISTO' | 'OBB' | 'BIL' | 'AZN';
 export type Anni = 1 | 2 | 3 | 5 | 10 | 20 | 35;
 export type TipoFile = 'isc' | 'rend';
 
@@ -24,8 +24,10 @@ export interface FileMeta {
   nomeFile: string;
   /** Data di aggiornamento dei dati COVIP indicata dall'utente (YYYY-MM-DD). */
   aggiornatoAl: string;
-  /** Solo per i rendimenti: periodo di riferimento. */
+  /** Solo per i rendimenti: periodo di riferimento (se indicato a mano). */
   periodo?: { dal: string; al: string };
+  /** Solo per i rendimenti: periodo letto dal file per ogni orizzonte (es. 3 → "2023-2025"). */
+  periodi?: Record<number, string>;
   comparti: number;
   caricatoIl: string;
 }

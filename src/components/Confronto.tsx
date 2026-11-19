@@ -66,7 +66,9 @@ export function Confronto({ dati, forme, modo, vaiAiDati }: Props) {
   const confronto = scelti.map((id) => lista.find((c) => c.id === id)).filter((c): c is Comparto => !!c);
   const etichetta = modo === 'isc' ? 'ISC' : 'Rend. netto';
   const anniOpz = modo === 'isc' ? ANNI_ISC : ANNI_REND;
-  const periodi = forme.map((f) => ({ f, m: dati.file[chiaveFile(f, 'rend')] })).filter((x) => x.m?.periodo);
+  const periodi = forme.map((f) => ({ f, m: dati.file[chiaveFile(f, 'rend')] })).filter((x) => x.m?.periodi || x.m?.periodo);
+  const testoPeriodo = (m: NonNullable<(typeof periodi)[number]['m']>) =>
+    m.periodi?.[anni] ? `${m.periodi[anni]} (anni solari)` : m.periodo ? `dal ${dataIt(m.periodo.dal)} al ${dataIt(m.periodo.al)}` : 'non indicato';
 
   const suggerimenti = useMemo(() => {
     const t = cerca.trim().toLowerCase();
@@ -122,7 +124,7 @@ export function Confronto({ dati, forme, modo, vaiAiDati }: Props) {
           <p className="warn">
             Rendimento storico, non previsione.{' '}
             {periodi.length
-              ? periodi.map((p) => `${NOME_FORMA[p.f]}: dal ${dataIt(p.m!.periodo!.dal)} al ${dataIt(p.m!.periodo!.al)}`).join(' · ')
+              ? `Periodo di riferimento (${anni} ${anni === 1 ? 'anno' : 'anni'}): ` + periodi.map((p) => `${NOME_FORMA[p.f]} ${testoPeriodo(p.m!)}`).join(' · ')
               : '⚠️ Periodo di riferimento non indicato.'}
           </p>
         )}

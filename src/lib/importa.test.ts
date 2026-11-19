@@ -115,3 +115,56 @@ describe('import', () => {
     expect(rimuoviSlot(rimuoviSlot(u, 'PIP', 'isc'), 'PIP', 'rend')).toHaveLength(0);
   });
 });
+
+// Struttura dei file COVIP veri (dati INVENTATI): titoli su 3 righe con periodi, società e piano solo sulla prima riga
+// di ogni gruppo, categorie come codici, note in fondo, "&amp;" nei nomi, valori testuali con la virgola nel file dei costi.
+const covipRend: Riga[] = [
+  [],
+  [null, 'ELENCO DEI RENDIMENTI PER SINGOLA LINEA'],
+  [null, "SOCIETA'", 'PIP', 'NOTE', 'N. ALBO', 'LINEA', 'RAMO', 'CATEGORIA LINEA', 'NOTE', 'RENDIMENTI MEDI ANNUI (%)', null, null, null, null],
+  [null, null, null, null, null, null, null, null, null, 'Ultimo anno', 'Ultimi \r\n3 anni', 'Ultimi \r\n5 anni', 'Ultimi \r\n10 anni', 'Ultimi \r\n20 anni'],
+  [null, null, null, null, null, null, null, null, null, 2025, '2023-2025', '2021-2025', '2016-2025', '2006-2025'],
+  [null, 'SOCIETA UNO S.P.A.', 'PIANO UNO & CO', null, 1, 'LINEA GAR', 'Ramo I', 'GAR', '(3)', 1.6, 1.5, 1.3, 1.5, null],
+  [null, null, null, null, null, 'LINEA BIL', 'Ramo III', 'BIL', null, 4.8, 7.4, 2.4, 2.3, null],
+  [null, null, 'PIANO DUE', null, 2, 'LINEA AZN', 'Ramo III', 'AZN', null, 8.9, 10.9, 5.8, 4.6, null],
+  [null, null, null, null, null, 'LINEA OBB MISTO', 'Ramo III', 'OBB MISTO', null, 0.7],
+  [],
+  [null, '(1) Fondo chiuso a nuove adesioni'],
+];
+const covipIsc: Riga[] = [
+  ['N. Albo', 'Società', 'Fondo', 'Comparto', 'Note', 'Categ. comparto', 'ISC a 2 anni', 'ISC a 5 anni', 'ISC a 10 anni', 'ISC a 35 anni'],
+  [1, 'SOCIETA UNO ASSICURAZIONI S.P.A.', 'PIANO UNO &amp; CO', 'LINEA GAR', '(1)', 'GAR', '1,94', '1,37', '1,25', '1,21'],
+  [1, 'SOCIETA UNO ASSICURAZIONI S.P.A.', 'PIANO UNO &amp; CO', 'LINEA BIL', null, 'BIL', '2,57', '2,00', '1,88', '1,84'],
+  [2, 'SOCIETA DUE S.P.A.', 'PIANO DUE', 'LINEA AZN', null, 'AZN', '4,71', '3,03', '2,44', '2,01'],
+  [2, 'SOCIETA DUE S.P.A.', 'PIANO DUE', 'LINEA OBB MISTO', null, 'OBB', '3,00', '2,00', '1,50', '1,20'],
+];
+
+describe('struttura dei file COVIP', () => {
+  it('rendimenti: titoli su 3 righe, periodi, società ripetuta, note ignorate', () => {
+    const a = analizza(covipRend, 'rend');
+    expect(a.riconosciuto).toBe(true);
+    expect(a.ab).toMatchObject({ societa: 1, fondo: 2, comparto: 5, categoria: 7, y1: 9, y3: 10, y5: 11, y10: 12, y20: 13 });
+    expect(a.periodi).toEqual({ 1: '2025', 3: '2023-2025', 5: '2021-2025', 10: '2016-2025', 20: '2006-2025' });
+    const r = costruisci(covipRend, a.ultimaIntest, a.ab, 'rend', 'PIP');
+    expect(r.comparti).toHaveLength(4);
+    expect(r.comparti[1]).toMatchObject({ societa: 'SOCIETA UNO S.P.A.', fondo: 'PIANO UNO & CO', comparto: 'LINEA BIL', categoria: 'BIL' });
+    expect(r.comparti[2]).toMatchObject({ fondo: 'PIANO DUE', societa: 'SOCIETA UNO S.P.A.' });
+    expect(r.comparti[0].rend).toMatchObject({ 1: 1.6, 3: 1.5, 20: null });
+  });
+  it('costi: codici di categoria, virgole, &amp;; unione con i rendimenti anche se la società è scritta diversamente', () => {
+    const a = analizza(covipIsc, 'isc');
+    expect(a.riconosciuto).toBe(true);
+    expect(a.ab).toMatchObject({ societa: 1, fondo: 2, comparto: 3, categoria: 5, y2: 6, y5: 7, y10: 8, y35: 9 });
+    const isc = costruisci(covipIsc, a.ultimaIntest, a.ab, 'isc', 'PIP').comparti;
+    expect(isc[0]).toMatchObject({ fondo: 'PIANO UNO & CO', categoria: 'GAR', isc: { 2: 1.94, 35: 1.21 } });
+    expect(isc[3].categoria).toBe('OBB');
+    const ra = analizza(covipRend, 'rend');
+    const u = unisci(isc, costruisci(covipRend, ra.ultimaIntest, ra.ab, 'rend', 'PIP').comparti, 'rend');
+    expect(u).toHaveLength(4);
+    const obb = u.find((c) => c.comparto === 'LINEA OBB MISTO')!;
+    expect(obb.categoria).toBe('OBB MISTO'); // la categoria precisa dei rendimenti non viene sostituita da "OBB"
+    expect(obb.isc[2]).toBe(3);
+    expect(obb.rend[1]).toBe(0.7);
+  });
+});
+

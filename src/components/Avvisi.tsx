@@ -4,8 +4,8 @@ import { dataIt } from '../lib/formati';
 export const AVVISO_LEGALE =
   'Simulazione non vincolante. Per le condizioni complete consultare le CGA e la Nota informativa. Rendimenti passati non garantiscono risultati futuri.';
 
-/** Giorni oltre i quali segnaliamo che potrebbero esistere dati più recenti (soglia indicativa, ⚠️ DA VERIFICARE). */
-const GIORNI_DATI_VECCHI = 200;
+/** Giorni oltre i quali segnaliamo che potrebbero esistere dati più recenti. I file COVIP sono annuali (fine anno): soglia indicativa, ⚠️ DA VERIFICARE. */
+const GIORNI_DATI_VECCHI = 400;
 
 /** Stato dei dati COVIP rilevanti per la schermata: data di aggiornamento di ogni file, o invito a caricarlo. */
 export function BannerCovip({ dati, forme, tipi, vaiAiDati }: { dati: DatasetCovip; forme: FormaTipo[]; tipi: TipoFile[]; vaiAiDati: () => void }) {
@@ -26,8 +26,16 @@ export function BannerCovip({ dati, forme, tipi, vaiAiDati }: { dati: DatasetCov
       {vecchi && <div className="warn">⚠️ Alcuni dati potrebbero non essere gli ultimi pubblicati da COVIP: aggiornali dalla scheda Dati.</div>}
       {mancanti.length > 0 && (
         <div className="warn">
-          Da caricare: {mancanti.map((r) => `${r.t === 'isc' ? 'costi' : 'rendimenti'} ${NOME_FORMA[r.f]}`).join(', ')}.{' '}
-          <button className="link" onClick={vaiAiDati}>Vai a Dati</button>
+          Da caricare:{' '}
+          {forme
+            .map((f) => {
+              const m = tipi.filter((t) => !dati.file[chiaveFile(f, t)]);
+              if (!m.length) return null;
+              return m.length === tipi.length ? NOME_FORMA[f] : `${NOME_FORMA[f]} (${m.map((t) => (t === 'isc' ? 'costi' : 'rendimenti')).join(', ')})`;
+            })
+            .filter(Boolean)
+            .join(', ')}
+          . <button className="link" onClick={vaiAiDati}>Vai a Dati</button>
         </div>
       )}
     </div>

@@ -2,3 +2,4 @@ node_modules
 dist
 esplora
 *.local
+src/**/*.local.test.ts

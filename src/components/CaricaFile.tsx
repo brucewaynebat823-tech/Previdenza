@@ -67,6 +67,9 @@ export function CaricaFile({ forma, tipo, onImporta, onChiudi }: Props) {
     setAb(an.ab);
     setOkIncerto(false);
     setModifica(!an.riconosciuto);
+    // Rendimenti: i dati sono riferiti alla fine dell'ultimo anno indicato nei titoli (es. 2025 → 31/12/2025). Da controllare.
+    const anniLetti = Object.values(an.periodi).flatMap((p) => p.split('-').map(Number));
+    if (tipo === 'rend' && anniLetti.length) setAggiornatoAl(`${Math.max(...anniLetti)}-12-31`);
   }
   function ricalcolaTitoli(nuovoDa: number, nuovoA: number) {
     const dd = Math.min(nuovoDa, nuovoA);
@@ -109,19 +112,25 @@ export function CaricaFile({ forma, tipo, onImporta, onChiudi }: Props) {
   const haValori = ANNI_PER_TIPO[tipo].some((x) => ab[`y${x}` as Campo] !== undefined) || (ab.anni !== undefined && ab.valore !== undefined);
   const riconosciuto = (ab.comparto !== undefined || ab.fondo !== undefined) && haValori;
   const incerto = !!analisi?.incerto && !okIncerto;
+  const periodiLetti = !!analisi && Object.keys(analisi.periodi).length > 0;
 
   const problemi: string[] = [];
   if (fogli.length) {
     if (!riconosciuto) problemi.push('Abbina almeno il comparto (o fondo) e le colonne dei valori in “Controlla le colonne”.');
     else if (incerto) problemi.push('Ho abbinato le colonne per posizione, non dai titoli: controllale e spunta “Le colonne sono giuste”.');
     if (!aggiornatoAl) problemi.push('Indica la data di aggiornamento dei dati (la trovi sulla pagina COVIP o nel file).');
-    if (tipo === 'rend' && (!dal || !al)) problemi.push('Indica il periodo dei rendimenti (dal / al).');
+    if (tipo === 'rend' && !periodiLetti && (!dal || !al)) problemi.push('Indica il periodo dei rendimenti (dal / al).');
     if (anteprima && anteprima.comparti.length === 0) problemi.push('Nessuna riga valida con questo abbinamento.');
   }
 
   function conferma() {
     if (!anteprima) return;
-    onImporta(anteprima.comparti, { nomeFile, aggiornatoAl, periodo: tipo === 'rend' ? { dal, al } : undefined });
+    onImporta(anteprima.comparti, {
+      nomeFile,
+      aggiornatoAl,
+      periodi: tipo === 'rend' && periodiLetti ? analisi!.periodi : undefined,
+      periodo: tipo === 'rend' && !periodiLetti ? { dal, al } : undefined,
+    });
     onChiudi();
   }
 
@@ -241,9 +250,14 @@ export function CaricaFile({ forma, tipo, onImporta, onChiudi }: Props) {
               )}
 
               <h4>Data dei dati</h4>
+              {tipo === 'rend' && periodiLetti && (
+                <p className="nota">
+                  Periodi letti dal file: {Object.entries(analisi!.periodi).map(([n, p]) => `${n} ${n === '1' ? 'anno' : 'anni'}: ${p}`).join(' · ')}. La data qui sotto è dedotta da questi: controllala.
+                </p>
+              )}
               <div className="griglia">
                 <label className="campo"><span>Aggiornati al</span><input type="date" value={aggiornatoAl} onChange={(e) => setAggiornatoAl(e.target.value)} /></label>
-                {tipo === 'rend' && (
+                {tipo === 'rend' && !periodiLetti && (
                   <>
                     <label className="campo"><span>Periodo: dal</span><input type="date" value={dal} onChange={(e) => setDal(e.target.value)} /></label>
                     <label className="campo"><span>Periodo: al</span><input type="date" value={al} onChange={(e) => setAl(e.target.value)} /></label>

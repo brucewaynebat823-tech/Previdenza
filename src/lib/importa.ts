@@ -20,7 +20,9 @@ export const CAMPI_ANAGRAFICA: { campo: Campo; nome: string }[] = [
 ];
 export const ANNI_PER_TIPO: Record<TipoFile, number[]> = { isc: [2, 5, 10, 35], rend: [1, 3, 5, 10, 20] };
 
-const testoCella = (v: Cella) => String(v ?? '').replace(/\s+/g, ' ').trim();
+const ENTITA: Record<string, string> = { '&amp;': '&', '&quot;': '"', '&#39;': "'", '&apos;': "'", '&lt;': '<', '&gt;': '>' };
+/** Testo di una cella: spazi normalizzati e caratteri HTML decodificati (alcuni file COVIP hanno "&amp;"). */
+const testoCella = (v: Cella) => String(v ?? '').replace(/&(amp|quot|#39|apos|lt|gt);/g, (m) => ENTITA[m]).replace(/\s+/g, ' ').trim();
 const norm = (v: Cella) => testoCella(v).toLowerCase().replace(/[_./\-–]+/g, ' ').replace(/\s+/g, ' ').trim();
 
 /** Numero da cella: accetta 1,23 / 1.23 / "1,23%". Qualsiasi altra cosa (n.d., -, testo) → null. */
@@ -64,6 +66,8 @@ export function titoliColonne(righe: Riga[], da: number, a: number): string[] {
 }
 
 const reAnno = (a: number) => new RegExp(`(?<![0-9/])${a}(?![0-9/])`);
+/** Il titolo indica l'orizzonte di `a` anni? ("3 anni", "ISC_3", "Ultimo anno" = 1). */
+const indicaAnni = (a: number, t: string) => reAnno(a).test(t) || (a === 1 && /ultimo anno/.test(t));
 
 /** Abbinamento suggerito dai titoli (e, per formati "lunghi", dai dati). */
 export function suggerisci(titoli: string[], tipo: TipoFile, dati: Riga[] = []): Abbinamento {
@@ -75,14 +79,14 @@ export function suggerisci(titoli: string[], tipo: TipoFile, dati: Riga[] = []):
     if (i >= 0) ab[c] = i;
   };
   set('societa', trova(/societ|gestore|compagnia|impresa|ente|ragione sociale|istituto|banca|\bsgr\b|\bsim\b/));
-  set('comparto', trova(/compart|linea|profilo|gestione/));
+  set('comparto', trova(/^(?!.*categ).*(compart|linea|profilo|gestione)/));
   set('fondo', trova(/\b(fondo|piano|pip)\b|denominazione|forma pensionistica|\bnome\b/));
-  set('categoria', trova(/categoria|tipologia|tipo comparto|tipo di comparto|classe|politica/));
+  set('categoria', trova(/categ|tipologia|tipo comparto|tipo di comparto|classe|politica/));
 
   const parola = tipo === 'isc' ? /isc|cost|indicatore/ : /rend/;
   const opposta = tipo === 'isc' ? /rend/ : /isc|cost|indicatore/;
   for (const a of ANNI_PER_TIPO[tipo]) {
-    const cand = h.map((t, i) => ({ t, i })).filter(({ t, i }) => !usata(i) && reAnno(a).test(t) && !opposta.test(t));
+    const cand = h.map((t, i) => ({ t, i })).filter(({ t, i }) => !usata(i) && indicaAnni(a, t) && !opposta.test(t));
     const pref = cand.find(({ t }) => parola.test(t) && /ann|\ba\b|\by\b/.test(t)) ?? cand.find(({ t }) => /ann|\ba\b|\by\b|^\d+$/.test(t)) ?? cand.find(({ t }) => parola.test(t));
     if (pref) ab[`y${a}` as Campo] = pref.i;
   }
@@ -114,6 +118,8 @@ export interface Analisi {
   punteggio: number;
   /** Colonne dei valori e dell'anagrafica riconosciute con sicurezza. */
   riconosciuto: boolean;
+  /** Periodo di riferimento letto dai titoli per ogni orizzonte (es. 3 → "2023-2025"). */
+  periodi: Record<number, string>;
   /** Abbinamento ricavato a posizione (non dai titoli): va confermato dall'utente. */
   incerto: boolean;
 }
@@ -141,10 +147,10 @@ export function analizza(righe: Riga[], tipo: TipoFile): Analisi {
       const titoli = titoliColonne(righe, da, a);
       const ab = suggerisci(titoli, tipo, righe.slice(a + 1));
       const p = punteggio(ab, tipo);
-      if (!best || p > best.punteggio) best = { primaIntest: da, ultimaIntest: a, titoli, ab, punteggio: p, riconosciuto: false, incerto: false };
+      if (!best || p > best.punteggio) best = { primaIntest: da, ultimaIntest: a, titoli, ab, punteggio: p, riconosciuto: false, incerto: false, periodi: {} };
     }
   }
-  const r = best ?? { primaIntest: 0, ultimaIntest: 0, titoli: [], ab: {}, punteggio: 0, riconosciuto: false, incerto: false };
+  const r = best ?? { primaIntest: 0, ultimaIntest: 0, titoli: [], ab: {}, punteggio: 0, riconosciuto: false, incerto: false, periodi: {} };
   const dati = righe.slice(r.ultimaIntest + 1, r.ultimaIntest + 200);
   // Comparto non trovato dai titoli: prima colonna di testo (da confermare).
   if (r.ab.comparto === undefined && r.ab.fondo === undefined) {
@@ -173,6 +179,19 @@ export function analizza(righe: Riga[], tipo: TipoFile): Analisi {
     });
     if (numeriche.length) r.incerto = true;
   }
+  // Periodo di riferimento scritto sotto i titoli dei rendimenti (es. 2025, 2023-2025).
+  if (tipo === 'rend') {
+    for (const an of ANNI_PER_TIPO.rend) {
+      const col = r.ab[`y${an}` as Campo];
+      if (col === undefined) continue;
+      const compCol = r.ab.comparto ?? r.ab.fondo;
+      for (let i = r.primaIntest; i <= Math.min(r.ultimaIntest + 3, righe.length - 1); i++) {
+        if (i > r.ultimaIntest && compCol !== undefined && testoCella(righe[i]?.[compCol]) !== '') break; // già nei dati
+        const t = testoCella(righe[i]?.[col]).replace(/\s/g, '');
+        if (/^\d{4}([-–]\d{4})?$/.test(t)) r.periodi[an] = t.replace('–', '-');
+      }
+    }
+  }
   const valoriOk = ANNI_PER_TIPO[tipo].some((a) => r.ab[`y${a}` as Campo] !== undefined) || (r.ab.anni !== undefined && r.ab.valore !== undefined);
   r.riconosciuto = (r.ab.comparto !== undefined || r.ab.fondo !== undefined) && valoriOk && !r.incerto;
   return r;
@@ -180,16 +199,17 @@ export function analizza(righe: Riga[], tipo: TipoFile): Analisi {
 
 export function categoriaDaTesto(t: string): Categoria | null {
   const s = t.toLowerCase();
-  if (/garant/.test(s)) return 'GAR';
+  if (/garant|^gar\b/.test(s)) return 'GAR';
   if (/obbligazionario\s*puro|obb\.?\s*puro|monetari/.test(s)) return 'OBB PURO';
   if (/obbligazionario\s*misto|obb\.?\s*misto/.test(s)) return 'OBB MISTO';
-  if (/bilanc/.test(s)) return 'BIL';
-  if (/azion/.test(s)) return 'AZN';
+  if (/^obb\b|^obbligazionario$/.test(s)) return 'OBB';
+  if (/bilanc|^bil\b/.test(s)) return 'BIL';
+  if (/azion|^azn\b/.test(s)) return 'AZN';
   return null;
 }
 
-export const chiave = (forma: FormaTipo, c: Pick<Comparto, 'societa' | 'fondo' | 'comparto'>) =>
-  [forma, c.societa, c.fondo, c.comparto].map((x) => norm(x)).join('|');
+/** Identifica un comparto fra file diversi. Non usa la società: COVIP la scrive in modo diverso nei file dei costi e dei rendimenti. */
+export const chiave = (forma: FormaTipo, c: Pick<Comparto, 'fondo' | 'comparto'>) => [forma, c.fondo, c.comparto].map((x) => norm(x)).join('|');
 
 export interface RisultatoImport {
   comparti: Comparto[];
@@ -209,11 +229,20 @@ export function costruisci(righe: Riga[], ultimaIntest: number, ab: Abbinamento,
   };
   const mappa = new Map<string, Comparto>();
   let scartate = 0;
+  // Società e piano scritti solo sulla prima riga di un gruppo (celle unite): si ripetono finché non cambiano.
+  let ultimaSocieta = '';
+  let ultimoFondo = '';
   for (const r of righe.slice(ultimaIntest + 1)) {
-    const comparto = testo(r, ab.comparto);
-    const fondo = testo(r, ab.fondo);
-    const societa = testo(r, ab.societa);
-    if (!comparto && !fondo) {
+    const comparto0 = testo(r, ab.comparto);
+    const fondo0 = testo(r, ab.fondo);
+    const societa0 = testo(r, ab.societa);
+    if (societa0) ultimaSocieta = societa0;
+    if (fondo0) ultimoFondo = fondo0;
+    const haDati = comparto0 !== '' || (ab.comparto === undefined && fondo0 !== '');
+    const comparto = comparto0;
+    const fondo = haDati ? fondo0 || ultimoFondo : '';
+    const societa = haDati ? societa0 || ultimaSocieta : '';
+    if (!haDati) {
       if (r.some((c) => c !== null && c !== undefined && c !== '')) scartate++;
       continue;
     }
@@ -245,7 +274,11 @@ export function unisci(esistenti: Comparto[], nuovi: Comparto[], tipo: TipoFile)
   for (const n of nuovi) {
     const e = mappa.get(n.id);
     if (!e) mappa.set(n.id, n);
-    else mappa.set(n.id, { ...e, categoria: n.categoria ?? e.categoria, ...(tipo === 'isc' ? { isc: n.isc } : { rend: n.rend }) });
+    else {
+      // Una categoria generica (OBB) non sostituisce una più precisa (OBB PURO / OBB MISTO).
+      const categoria = n.categoria === 'OBB' && e.categoria && e.categoria !== 'OBB' ? e.categoria : n.categoria ?? e.categoria;
+      mappa.set(n.id, { ...e, categoria, ...(tipo === 'isc' ? { isc: n.isc } : { rend: n.rend }) });
+    }
   }
   return [...mappa.values()];
 }
