@@ -301,8 +301,9 @@ export function Preventivo({ dati }: { dati: DatasetCovip }) {
               {input.tfr && <span>Con TFR e contributi (datore {pct(input.tfr.contributoDatorePct)}, dipendente {pct(input.tfr.contributoDipendentePct)} della RAL)</span>}
             </div>
             {avvisoPeriodo && <p className="warn">{avvisoPeriodo}</p>}
+            <div className="kpi"><span>Capitale finale lordo</span><b>{eur(r.capitaleLordo)}</b><small>prima delle imposte finali</small></div>
             <div className="kpi"><span>Capitale finale netto</span><b>{eur(r.capitaleNetto)}</b>{intervallo && <small>tra le linee Alleata (stesso periodo): da {eur(intervallo.min)} a {eur(intervallo.max)}</small>}</div>
-            <div className="kpi"><span>Rendita annua stimata ⚠️</span><b>{eur(r.rendita)}</b><small>{eur(r.rendita / 12)} al mese · netto ÷ {ALLEATA.anniRendita}</small></div>
+            <div className="kpi"><span>Rendita annua stimata ⚠️</span><b>{eur(r.rendita)}</b><small>{eur(r.rendita / 12)} al mese · netto ÷ {ALLEATA.anniRendita} · lorda {eur(r.capitaleLordo / ALLEATA.anniRendita)} l’anno</small></div>
             <div className="kpi"><span>Premi versati ({r.anni} anni)</span><b>{eur(r.premiVersati)}</b></div>
             <div className="kpi"><span>Risparmio fiscale totale</span><b>{eur(r.risparmioFiscaleTotale)}</b><small>{eur(r.risparmioFiscaleAnnuo)} l’anno</small></div>
             <div className="kpi"><span>Imposte finali</span><b>{eur(r.impostaFinale)}</b><small>aliquota {pct(r.aliquotaFinale * 100)}</small></div>
