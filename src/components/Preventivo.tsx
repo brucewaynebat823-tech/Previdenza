@@ -168,7 +168,7 @@ export function Preventivo({ dati }: { dati: DatasetCovip }) {
               </div>
             )}
             <p className="nota">
-              [Dato COVIP · Storico] {dati.file['PIP:rend'] ? `PIP, dati al ${dataIt(dati.file['PIP:rend'].aggiornatoAl)}${dati.file['PIP:rend'].periodo ? `, periodo ${dataIt(dati.file['PIP:rend'].periodo.dal)}–${dataIt(dati.file['PIP:rend'].periodo.al)}` : ''}: ` : '(file rendimenti PIP non caricato) '}{(['g', 'b', 'a'] as const).map((k) => `${{ g: 'Garantita', b: 'Bilanciata', a: 'Azionaria' }[k]} ${tassi[k] == null ? 'n.d.' : pct(tassi[k] as number)}`).join(' · ')}
+              [Dato COVIP · Storico] {dati.file['PIP:rend'] ? `PIP, dati al ${dataIt(dati.file['PIP:rend'].aggiornatoAl)}${s.periodo && dati.file['PIP:rend'].periodi?.[Number(s.periodo)] ? `, periodo ${dati.file['PIP:rend'].periodi![Number(s.periodo)]}` : dati.file['PIP:rend'].periodo ? `, periodo ${dataIt(dati.file['PIP:rend'].periodo.dal)}–${dataIt(dati.file['PIP:rend'].periodo.al)}` : ''}: ` : '(file rendimenti PIP non caricato) '}{(['g', 'b', 'a'] as const).map((k) => `${{ g: 'Garantita', b: 'Bilanciata', a: 'Azionaria' }[k]} ${tassi[k] == null ? 'n.d.' : pct(tassi[k] as number)}`).join(' · ')}
             </p>
           </>
         ) : null}
