@@ -168,3 +168,34 @@ describe('struttura dei file COVIP', () => {
   });
 });
 
+describe('platee diverse per lo stesso comparto', () => {
+  const costi: Riga[] = [
+    ['N. ALBO', 'FONDO', 'COMPARTO', 'COMPARTO_1', 'PLATEA', 'CATEGORIA COMPARTO', 'ISC 2 ANNI', 'ISC 5 ANNI'],
+    [1, 'FONDO UNO', 20010105, 'GARANTITO', null, 'GAR', 1.2, 0.8],
+    [2, 'FONDO DUE', 20020101, 'GARANTITO', 'Lavoratori dipendenti', 'GAR', 1.3, 0.9],
+    [2, 'FONDO DUE', 20020101, 'GARANTITO', 'Lavoratori autonomi', 'GAR', 1.8, 1.1],
+    [2, 'FONDO DUE', 20020102, 'DINAMICO', null, 'AZN', 0.9, 0.5],
+  ];
+  const rend: Riga[] = [
+    ['N. ALBO', 'FONDO', 'COMPARTO', 'CATEGORIA', 'Ultimo anno', 'Ultimi 3 anni'],
+    [1, 'FONDO UNO', 'GARANTITO', 'GAR', 2.0, 2.5],
+    [2, 'FONDO DUE', 'GARANTITO', 'GAR', 1.5, 1.7],
+    [null, null, 'DINAMICO', 'AZN', 7.0, 8.0],
+  ];
+  it('sceglie la colonna di testo fra più colonne "COMPARTO" e tiene separate le platee', () => {
+    const a = analizza(costi, 'isc');
+    expect(a.ab).toMatchObject({ fondo: 1, comparto: 3, variante: 4, categoria: 5, y2: 6, y5: 7 });
+    const c = costruisci(costi, a.ultimaIntest, a.ab, 'isc', 'FPN').comparti;
+    expect(c.map((x) => x.comparto)).toEqual(['GARANTITO', 'GARANTITO (Lavoratori dipendenti)', 'GARANTITO (Lavoratori autonomi)', 'DINAMICO']);
+    expect(c[2].isc[2]).toBe(1.8);
+  });
+  it('il rendimento senza platea vale per tutte le varianti', () => {
+    const ai = analizza(costi, 'isc');
+    const ar = analizza(rend, 'rend');
+    const u = unisci(costruisci(costi, ai.ultimaIntest, ai.ab, 'isc', 'FPN').comparti, costruisci(rend, ar.ultimaIntest, ar.ab, 'rend', 'FPN').comparti, 'rend');
+    expect(u).toHaveLength(4);
+    expect(u.filter((x) => x.comparto.startsWith('GARANTITO (')).every((x) => x.rend[1] === 1.5)).toBe(true);
+    expect(u.find((x) => x.comparto === 'DINAMICO')).toMatchObject({ isc: { 2: 0.9 }, rend: { 1: 7 } });
+  });
+});
+

@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import type { DatasetCovip, FormaTipo } from '../data/tipi';
-import { isAlleata, ordina, valore, type Metrica } from '../lib/stats';
+import { isAlleata, ordina, valore, type Metrica, gestore } from '../lib/stats';
 import { pct } from '../lib/formati';
 import { BannerCovip } from './Avvisi';
 import { CatBadge } from './Confronto';
@@ -95,7 +95,7 @@ export function Combinata({ dati, vaiAiDati }: { dati: DatasetCovip; vaiAiDati: 
             <text x={M - 4} y={14} fontSize="9" fill="#51607a" textAnchor="end">{y1.toFixed(1)}</text>
             {punti.ok.map((c) => (
               <circle key={c.id} cx={px(valore(c, mi)!)} cy={py(valore(c, mr)!)} r={isAlleata(c) ? 6 : 3.5} fill={catInfo(c.categoria).colore} fillOpacity={isAlleata(c) ? 1 : 0.6} stroke={isAlleata(c) ? '#000' : 'none'} strokeWidth={2}>
-                <title>{`${c.comparto} (${c.societa}) · ISC ${pct(valore(c, mi))} · rend. ${pct(valore(c, mr))}`}</title>
+                <title>{`${c.comparto} (${gestore(c)}) · ISC ${pct(valore(c, mi))} · rend. ${pct(valore(c, mr))}`}</title>
               </circle>
             ))}
           </svg>
@@ -112,7 +112,7 @@ export function Combinata({ dati, vaiAiDati }: { dati: DatasetCovip; vaiAiDati: 
               <tbody>
                 {tab.map((c) => (
                   <tr key={c.id} className={isAlleata(c) ? 'alleata' : ''}>
-                    <td>{c.comparto}<small>{c.societa}</small><CatBadge cat={c.categoria} /></td>
+                    <td>{c.comparto}<small>{gestore(c)}</small><CatBadge cat={c.categoria} /></td>
                     <td className="n">{pct(valore(c, mi))}</td>
                     <td className="n">{pct(valore(c, mr))}</td>
                   </tr>
