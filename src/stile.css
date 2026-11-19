@@ -50,3 +50,4 @@ nav button{display:flex;flex-direction:column;align-items:center;gap:2px}.ico{fo
 .slot small{display:block}.azioni{display:flex;gap:6px}.azioni button{min-height:40px;padding:6px 12px}
 .progresso{height:10px;background:#e3e8f2;border-radius:6px;overflow:hidden;margin:10px 0 4px}.progresso i{display:block;height:100%;background:#0f9d6a}
 .vuoto button{margin:6px 0}
+.tabfile{font-size:11.5px}.tabfile td{white-space:nowrap;padding:3px 5px;border:1px solid var(--bd)}.tabfile tr.tit td{background:#fff3cf;font-weight:700}
