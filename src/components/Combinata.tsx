@@ -2,8 +2,12 @@ import { useMemo, useState } from 'react';
 import type { DatasetCovip, FormaTipo } from '../data/tipi';
 import { isAlleata, ordina, valore, type Metrica } from '../lib/stats';
 import { pct } from '../lib/formati';
+import { BannerCovip } from './Avvisi';
+import { CatBadge } from './Confronto';
+import { FORME_TUTTE } from '../data/tipi';
+import { CATEGORIE, catInfo } from '../lib/categorie';
 
-export function Combinata({ dati }: { dati: DatasetCovip }) {
+export function Combinata({ dati, vaiAiDati }: { dati: DatasetCovip; vaiAiDati: () => void }) {
   const [anniIsc, setAnniIsc] = useState<2 | 5 | 10 | 35>(10);
   const [anniRend, setAnniRend] = useState<1 | 3 | 5 | 10 | 20>(10);
   const [forma, setForma] = useState<FormaTipo | ''>('');
@@ -20,11 +24,16 @@ export function Combinata({ dati }: { dati: DatasetCovip }) {
 
   const tab = useMemo(() => ordina(punti.ok, ordine === 'isc' ? mi : mr, ordine === 'isc' ? 'asc' : 'desc'), [punti, ordine, anniIsc, anniRend]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  const banner = <BannerCovip dati={dati} forme={FORME_TUTTE} tipi={['isc', 'rend']} vaiAiDati={vaiAiDati} />;
   if (!dati.comparti.length)
     return (
-      <section className="card">
-        <p className="vuoto">Nessun dato disponibile: la vista combinata compare quando i file ufficiali COVIP saranno caricati.</p>
-      </section>
+      <>
+        {banner}
+        <section className="card vuoto">
+          <p><b>Servono entrambi i file: costi e rendimenti.</b></p>
+          <button onClick={vaiAiDati}>Carica i dati</button>
+        </section>
+      </>
     );
 
   const xs = punti.ok.map((c) => valore(c, mi)!);
@@ -37,6 +46,7 @@ export function Combinata({ dati }: { dati: DatasetCovip }) {
 
   return (
     <>
+      {banner}
       <section className="card">
         <p className="nota">Ogni punto è un comparto: a sinistra costa meno (ISC), in alto rende di più (storico, non previsione).</p>
         <div className="seg">
@@ -77,7 +87,7 @@ export function Combinata({ dati }: { dati: DatasetCovip }) {
             <text x={M - 4} y={H - M} fontSize="9" fill="#51607a" textAnchor="end">{y0.toFixed(1)}</text>
             <text x={M - 4} y={14} fontSize="9" fill="#51607a" textAnchor="end">{y1.toFixed(1)}</text>
             {punti.ok.map((c) => (
-              <circle key={c.id} cx={px(valore(c, mi)!)} cy={py(valore(c, mr)!)} r={isAlleata(c) ? 6 : 3.5} fill={isAlleata(c) ? '#f5a800' : '#0b5fff'} fillOpacity={isAlleata(c) ? 1 : 0.55} stroke={isAlleata(c) ? '#7a5200' : 'none'}>
+              <circle key={c.id} cx={px(valore(c, mi)!)} cy={py(valore(c, mr)!)} r={isAlleata(c) ? 6 : 3.5} fill={catInfo(c.categoria).colore} fillOpacity={isAlleata(c) ? 1 : 0.6} stroke={isAlleata(c) ? '#000' : 'none'} strokeWidth={2}>
                 <title>{`${c.comparto} (${c.societa}) · ISC ${pct(valore(c, mi))} · rend. ${pct(valore(c, mr))}`}</title>
               </circle>
             ))}
@@ -95,7 +105,7 @@ export function Combinata({ dati }: { dati: DatasetCovip }) {
               <tbody>
                 {tab.map((c) => (
                   <tr key={c.id} className={isAlleata(c) ? 'alleata' : ''}>
-                    <td>{c.comparto}<small>{c.societa} · {c.categoria ?? 'N.D.'}</small></td>
+                    <td>{c.comparto}<small>{c.societa}</small><CatBadge cat={c.categoria} /></td>
                     <td className="n">{pct(valore(c, mi))}</td>
                     <td className="n">{pct(valore(c, mr))}</td>
                   </tr>
@@ -104,7 +114,12 @@ export function Combinata({ dati }: { dati: DatasetCovip }) {
             </table>
           </div>
         )}
-        <p className="nota">Arancione = comparti Alleata Previdenza. Rendimento: storico, non previsione.</p>
+        <div className="chips">
+          {CATEGORIE.filter((k) => punti.ok.some((c) => (c.categoria ?? 'ND') === k.id)).map((k) => (
+            <span key={k.id} className="badge" style={{ color: k.colore, background: k.sfondo, borderColor: k.colore }}>● {k.nome}</span>
+          ))}
+        </div>
+        <p className="nota">Colore = tipologia di fondo. Contorno nero e punto più grande = comparti Alleata Previdenza. Rendimento: storico, non previsione.</p>
       </section>
     </>
   );

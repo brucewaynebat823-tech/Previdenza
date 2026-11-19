@@ -4,7 +4,7 @@ import { ALLEATA, DA_VERIFICARE, FONTE_ALLEATA } from '../config/alleata';
 import { calcolaPreventivo, lordoDaNetto, validaInput, type InputPreventivo } from '../lib/preventivo';
 import { carica, salva, cancella, numero } from '../lib/archivio';
 import { lineaAlleata, valore } from '../lib/stats';
-import { eur, pct } from '../lib/formati';
+import { eur, pct, dataIt } from '../lib/formati';
 import { AVVISO_LEGALE } from './Avvisi';
 
 type Fondo = '' | 'g' | 'b' | 'a' | 'mix' | 'libera';
@@ -168,7 +168,7 @@ export function Preventivo({ dati }: { dati: DatasetCovip }) {
               </div>
             )}
             <p className="nota">
-              Dati: {(['g', 'b', 'a'] as const).map((k) => `${{ g: 'Garantita', b: 'Bilanciata', a: 'Azionaria' }[k]} ${tassi[k] == null ? 'n.d.' : pct(tassi[k] as number)}`).join(' · ')}
+              [Dato COVIP · Storico] {dati.file['PIP:rend'] ? `PIP, dati al ${dataIt(dati.file['PIP:rend'].aggiornatoAl)}${dati.file['PIP:rend'].periodo ? `, periodo ${dataIt(dati.file['PIP:rend'].periodo.dal)}–${dataIt(dati.file['PIP:rend'].periodo.al)}` : ''}: ` : '(file rendimenti PIP non caricato) '}{(['g', 'b', 'a'] as const).map((k) => `${{ g: 'Garantita', b: 'Bilanciata', a: 'Azionaria' }[k]} ${tassi[k] == null ? 'n.d.' : pct(tassi[k] as number)}`).join(' · ')}
             </p>
           </>
         ) : null}

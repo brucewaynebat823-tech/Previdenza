@@ -1,7 +1,8 @@
-/** Modello neutro dei dati COVIP. Il convertitore dei file ufficiali lo riempirà; finché mancano file reali l'elenco è vuoto. */
+/** Modello neutro dei dati COVIP. L'importazione dei file ufficiali lo riempie; finché non ci sono file l'elenco è vuoto. */
 export type FormaTipo = 'PIP' | 'FPN' | 'FPA' | 'PREESISTENTE';
 export type Categoria = 'GAR' | 'OBB PURO' | 'OBB MISTO' | 'BIL' | 'AZN';
 export type Anni = 1 | 2 | 3 | 5 | 10 | 20 | 35;
+export type TipoFile = 'isc' | 'rend';
 
 export interface Comparto {
   id: string;
@@ -16,20 +17,41 @@ export interface Comparto {
   rend: Partial<Record<1 | 3 | 5 | 10 | 20, number | null>>;
 }
 
+/** Un file COVIP caricato: una forma pensionistica × un tipo (costi o rendimenti). */
+export interface FileMeta {
+  forma: FormaTipo;
+  tipo: TipoFile;
+  nomeFile: string;
+  /** Data di aggiornamento dei dati COVIP indicata dall'utente (YYYY-MM-DD). */
+  aggiornatoAl: string;
+  /** Solo per i rendimenti: periodo di riferimento. */
+  periodo?: { dal: string; al: string };
+  comparti: number;
+  caricatoIl: string;
+}
+
 export interface DatasetCovip {
-  /** Data di riferimento dei dati COVIP (YYYY-MM-DD) o null se nessun dato è stato caricato. */
-  aggiornatoAl: string | null;
-  /** Periodo di riferimento dei rendimenti. */
-  periodoRendimenti: { dal: string; al: string } | null;
   fonte: string;
   urlFonte: string;
   comparti: Comparto[];
+  /** Chiave: `${forma}:${tipo}`. */
+  file: Record<string, FileMeta>;
 }
 
+export const chiaveFile = (forma: FormaTipo, tipo: TipoFile) => `${forma}:${tipo}`;
+
 export const DATASET_VUOTO: DatasetCovip = {
-  aggiornatoAl: null,
-  periodoRendimenti: null,
   fonte: 'COVIP – open data',
   urlFonte: 'https://www.covip.it/open-data',
   comparti: [],
+  file: {},
 };
+
+export const NOME_FORMA: Record<FormaTipo, string> = {
+  PIP: 'PIP',
+  FPN: 'Fondi negoziali',
+  FPA: 'Fondi aperti',
+  PREESISTENTE: 'Fondi preesistenti',
+};
+export const FORME_TUTTE: FormaTipo[] = ['PIP', 'FPN', 'FPA', 'PREESISTENTE'];
+export const FORME_ALTRE: FormaTipo[] = ['FPN', 'FPA', 'PREESISTENTE'];

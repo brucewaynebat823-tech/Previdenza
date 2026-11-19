@@ -1,4 +1,4 @@
-import type { DatasetCovip } from '../data/tipi';
+import { chiaveFile, NOME_FORMA, type DatasetCovip, type FormaTipo, type TipoFile } from '../data/tipi';
 import { dataIt } from '../lib/formati';
 
 export const AVVISO_LEGALE =
@@ -7,18 +7,29 @@ export const AVVISO_LEGALE =
 /** Giorni oltre i quali segnaliamo che potrebbero esistere dati più recenti (soglia indicativa, ⚠️ DA VERIFICARE). */
 const GIORNI_DATI_VECCHI = 200;
 
-export function BannerCovip({ dati }: { dati: DatasetCovip }) {
-  const d = dataIt(dati.aggiornatoAl);
-  const vecchi = dati.aggiornatoAl ? (Date.now() - new Date(dati.aggiornatoAl).getTime()) / 864e5 > GIORNI_DATI_VECCHI : false;
+/** Stato dei dati COVIP rilevanti per la schermata: data di aggiornamento di ogni file, o invito a caricarlo. */
+export function BannerCovip({ dati, forme, tipi, vaiAiDati }: { dati: DatasetCovip; forme: FormaTipo[]; tipi: TipoFile[]; vaiAiDati: () => void }) {
+  const righe = forme.flatMap((f) => tipi.map((t) => ({ f, t, m: dati.file[chiaveFile(f, t)] })));
+  const caricati = righe.filter((r) => r.m);
+  const mancanti = righe.filter((r) => !r.m);
+  const vecchi = caricati.some((r) => (Date.now() - new Date(r.m!.aggiornatoAl).getTime()) / 864e5 > GIORNI_DATI_VECCHI);
   return (
     <div className="banner">
-      <b>{d ? `Dati COVIP aggiornati al ${d}` : 'Dati COVIP non ancora caricati'}</b> · Fonte:{' '}
-      <a href={dati.urlFonte} target="_blank" rel="noreferrer">
-        {dati.fonte}
-      </a>{' '}
-      · non in tempo reale.
-      {vecchi && <div className="warn">⚠️ I dati potrebbero non essere gli ultimi pubblicati da COVIP: usa “Aggiorna dati”.</div>}
-      {!d && <div className="warn">⚠️ Nessun valore è mostrato finché non vengono caricati i file ufficiali COVIP: l’app non usa stime né fonti diverse.</div>}
+      <b>Fonte: </b>
+      <a href={dati.urlFonte} target="_blank" rel="noreferrer">COVIP – open data</a>
+      <span> · non in tempo reale</span>
+      {caricati.map((r) => (
+        <div key={chiaveFile(r.f, r.t)}>
+          {r.t === 'isc' ? 'Costi' : 'Rendimenti'} {NOME_FORMA[r.f]}: <b>Dati COVIP aggiornati al {dataIt(r.m!.aggiornatoAl)}</b>
+        </div>
+      ))}
+      {vecchi && <div className="warn">⚠️ Alcuni dati potrebbero non essere gli ultimi pubblicati da COVIP: aggiornali dalla scheda Dati.</div>}
+      {mancanti.length > 0 && (
+        <div className="warn">
+          Da caricare: {mancanti.map((r) => `${r.t === 'isc' ? 'costi' : 'rendimenti'} ${NOME_FORMA[r.f]}`).join(', ')}.{' '}
+          <button className="link" onClick={vaiAiDati}>Vai a Dati</button>
+        </div>
+      )}
     </div>
   );
 }
