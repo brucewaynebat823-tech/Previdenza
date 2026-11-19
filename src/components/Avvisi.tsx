@@ -20,7 +20,7 @@ export function BannerCovip({ dati, forme, tipi, vaiAiDati }: { dati: DatasetCov
       <span> · non in tempo reale</span>
       {caricati.map((r) => (
         <div key={chiaveFile(r.f, r.t)}>
-          {r.t === 'isc' ? 'Costi' : 'Rendimenti'} {NOME_FORMA[r.f]}: <b>Dati COVIP aggiornati al {dataIt(r.m!.aggiornatoAl)}</b>
+          {r.t === 'isc' ? 'Costi' : 'Rendimenti'} {NOME_FORMA[r.f]}: <b>Dati COVIP aggiornati al {dataIt(r.m!.aggiornatoAl)}</b>{r.m!.dataDaVerificare ? ' ⚠️ data da verificare' : ''}
         </div>
       ))}
       {vecchi && <div className="warn">⚠️ Alcuni dati potrebbero non essere gli ultimi pubblicati da COVIP: aggiornali dalla scheda Dati.</div>}

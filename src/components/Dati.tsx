@@ -9,9 +9,10 @@ interface Props {
   onImporta: (forma: FormaTipo, tipo: TipoFile, nuovi: Comparto[], meta: Omit<FileMeta, 'forma' | 'tipo' | 'comparti' | 'caricatoIl'>) => void;
   onRimuovi: (forma: FormaTipo, tipo: TipoFile) => void;
   onAzzera: () => void;
+  haDatiUtente: boolean;
 }
 
-export function Dati({ dati, avviso, onImporta, onRimuovi, onAzzera }: Props) {
+export function Dati({ dati, avviso, onImporta, onRimuovi, onAzzera, haDatiUtente }: Props) {
   const [carica, setCarica] = useState<{ forma: FormaTipo; tipo: TipoFile } | null>(null);
   const totali = FORME_TUTTE.length * 2;
   const caricati = Object.keys(dati.file).length;
@@ -25,6 +26,8 @@ export function Dati({ dati, avviso, onImporta, onRimuovi, onAzzera }: Props) {
           {m ? (
             <small>
               ✓ {m.comparti} comparti · dati al {dataIt(m.aggiornatoAl)}
+              {m.dataDaVerificare ? ' ⚠️ data da verificare' : ''}
+              {m.origine === 'incorporato' ? ' · incluso nell’app' : ' · caricato da te'}
               {m.periodo ? ` · periodo ${dataIt(m.periodo.dal)}–${dataIt(m.periodo.al)}` : ''}
             </small>
           ) : (
@@ -33,8 +36,8 @@ export function Dati({ dati, avviso, onImporta, onRimuovi, onAzzera }: Props) {
         </div>
         <div className="azioni">
           <button className={m ? 'sec' : ''} onClick={() => setCarica({ forma, tipo })}>{m ? 'Sostituisci' : 'Carica'}</button>
-          {m && (
-            <button className="sec" aria-label={`Elimina ${tipo === 'isc' ? 'costi' : 'rendimenti'} ${NOME_FORMA[forma]}`} onClick={() => confirm('Eliminare questo file dal dispositivo?') && onRimuovi(forma, tipo)}>🗑</button>
+          {m && m.origine === 'utente' && (
+            <button className="sec" aria-label={`Elimina ${tipo === 'isc' ? 'costi' : 'rendimenti'} ${NOME_FORMA[forma]}`} onClick={() => confirm('Eliminare il file caricato da te? Se l’app ne include uno, tornerà quello.') && onRimuovi(forma, tipo)}>🗑</button>
           )}
         </div>
       </div>
@@ -46,8 +49,8 @@ export function Dati({ dati, avviso, onImporta, onRimuovi, onAzzera }: Props) {
       <section className="card">
         <h3>I tuoi dati COVIP</h3>
         <p className="nota">
-          Scarica i file dal sito ufficiale <a href="https://www.covip.it/open-data" target="_blank" rel="noreferrer">covip.it/open-data</a> e caricali qui, uno per riquadro.
-          Restano <b>salvati su questo dispositivo</b>: non devi ricaricarli ogni volta, solo quando COVIP pubblica nuovi dati.
+          L’app include già i dati COVIP indicati qui sotto. Per aggiornarli o aggiungere altre forme, scarica i file dal sito ufficiale <a href="https://www.covip.it/open-data" target="_blank" rel="noreferrer">covip.it/open-data</a> e caricali nel riquadro giusto.
+          I file che carichi restano <b>salvati solo su questo dispositivo</b> e sostituiscono quelli inclusi nell’app.
         </p>
         <div className="progresso" aria-label={`${caricati} file su ${totali}`}>
           <i style={{ width: `${(caricati / totali) * 100}%` }} />
@@ -65,9 +68,9 @@ export function Dati({ dati, avviso, onImporta, onRimuovi, onAzzera }: Props) {
       ))}
 
       <section className="card">
-        <p className="nota">I dati restano solo su questo dispositivo.</p>
-        {caricati > 0 && (
-          <button className="pericolo" onClick={() => confirm('Cancellare tutti i dati COVIP caricati su questo dispositivo?') && onAzzera()}>Cancella tutti i dati caricati</button>
+        <p className="nota">Quello che inserisci e carichi resta solo su questo dispositivo.</p>
+        {haDatiUtente && (
+          <button className="pericolo" onClick={() => confirm('Cancellare i file caricati da te su questo dispositivo? Resteranno i dati inclusi nell’app.') && onAzzera()}>Cancella i file che ho caricato</button>
         )}
       </section>
 

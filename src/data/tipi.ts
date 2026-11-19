@@ -30,7 +30,18 @@ export interface FileMeta {
   periodi?: Record<number, string>;
   comparti: number;
   caricatoIl: string;
+  /** Dati incorporati nell'app (pubblicati con essa) oppure caricati dall'utente su questo dispositivo. */
+  origine?: 'incorporato' | 'utente';
+  /** La data di aggiornamento non è scritta nel file ed è solo indicativa: va verificata sul sito COVIP. */
+  dataDaVerificare?: boolean;
 }
+
+/** Un file caricato: meta + comparti con i soli campi di quel tipo (costi o rendimenti). */
+export interface FileCaricato {
+  meta: FileMeta;
+  comparti: Comparto[];
+}
+export type Slots = Record<string, FileCaricato>;
 
 export interface DatasetCovip {
   fonte: string;

@@ -7,7 +7,8 @@
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
-    "test": "vitest run"
+    "test": "vitest run",
+    "dati": "rolldown scripts/genera-dati.ts --platform node --format esm --external read-excel-file/node -o .genera-dati.mjs && node .genera-dati.mjs"
   },
   "dependencies": {
     "html2canvas": "^1.4.1",

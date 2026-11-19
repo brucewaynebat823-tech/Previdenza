@@ -3,3 +3,4 @@ dist
 esplora
 *.local
 src/**/*.local.test.ts
+.genera-dati.mjs
