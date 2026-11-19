@@ -71,10 +71,13 @@ export function Combinata({ dati, vaiAiDati }: { dati: DatasetCovip; vaiAiDati: 
             <option value="FPA">Fondi aperti</option>
             <option value="PREESISTENTE">Preesistenti</option>
           </select>
-          <div className="seg">
-            <button className={vista === 'grafico' ? 'on' : ''} onClick={() => setVista('grafico')}>Grafico</button>
-            <button className={vista === 'tabella' ? 'on' : ''} onClick={() => setVista('tabella')}>Tabella</button>
-          </div>
+          <label className="campo">
+            <span>Vista</span>
+            <select value={vista} onChange={(e) => setVista(e.target.value as 'grafico' | 'tabella')} aria-label="Vista">
+              <option value="grafico">Grafico a dispersione</option>
+              <option value="tabella">Tabella ordinabile</option>
+            </select>
+          </label>
         </div>
         {punti.esclusi > 0 && <p className="warn">⚠️ {punti.esclusi} comparti esclusi perché mancano ISC o rendimento per il periodo scelto (nessuna stima).</p>}
       </section>

@@ -23,13 +23,22 @@ const GRUPPI: Record<Gruppo, { nome: string; forme: FormaTipo[] }> = {
   tutte: { nome: 'Tutte', forme: FORME_TUTTE },
 };
 
+const ETICHETTA_GRUPPO: Record<Gruppo, string> = {
+  pip: 'PIP (piani individuali pensionistici)',
+  altre: 'Altre forme (fondi negoziali, aperti, preesistenti)',
+  tutte: 'Tutte le forme',
+};
+
 function Scelta({ valore, opzioni, onCambia }: { valore: Gruppo; opzioni: Gruppo[]; onCambia: (g: Gruppo) => void }) {
   return (
-    <div className="seg grande" role="group" aria-label="Forme pensionistiche">
-      {opzioni.map((g) => (
-        <button key={g} className={valore === g ? 'on' : ''} onClick={() => onCambia(g)}>{GRUPPI[g].nome}</button>
-      ))}
-    </div>
+    <label className="campo scelta">
+      <span>Forme pensionistiche</span>
+      <select value={valore} onChange={(e) => onCambia(e.target.value as Gruppo)} aria-label="Forme pensionistiche">
+        {opzioni.map((g) => (
+          <option key={g} value={g}>{ETICHETTA_GRUPPO[g]}</option>
+        ))}
+      </select>
+    </label>
   );
 }
 

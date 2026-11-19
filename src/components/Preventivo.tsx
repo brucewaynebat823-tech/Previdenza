@@ -124,11 +124,10 @@ export function Preventivo({ dati }: { dati: DatasetCovip }) {
     </label>
   );
   const unita = (k: 'datoreUnita' | 'dipUnita') => (
-    <div className="seg mini">
-      {(['%', '€'] as const).map((u) => (
-        <button key={u} className={s[k] === u ? 'on' : ''} onClick={() => set(k, u)}>{u === '€' ? '€/mese' : '%'}</button>
-      ))}
-    </div>
+    <select value={s[k]} onChange={(e) => set(k, e.target.value as '%' | '€')} aria-label="Unità del contributo">
+      <option value="%">in % della RAL</option>
+      <option value="€">in € al mese</option>
+    </select>
   );
 
   async function esporta(tipo: 'png' | 'pdf') {
@@ -187,11 +186,15 @@ export function Preventivo({ dati }: { dati: DatasetCovip }) {
           {campo('premio', 'Premio annuo (€)', 'importo')}
           {campo('annoAdesione', 'Anno di prima adesione a una forma pensionistica', 'es. anno')}
         </div>
-        <div className="seg" role="group" aria-label="Tipo di reddito">
-          <button className={s.tipo === 'dip' ? 'on' : ''} onClick={() => set('tipo', 'dip')}>Dipendente</button>
-          <button className={s.tipo === 'aut' ? 'on' : ''} onClick={() => set('tipo', 'aut')}>Autonomo</button>
-          <button className={s.tipo === 'forf' ? 'on' : ''} onClick={() => set('tipo', 'forf')}>Autonomo forfettario</button>
-        </div>
+        <label className="campo">
+          <span>Tipo di reddito</span>
+          <select value={s.tipo} onChange={(e) => set('tipo', e.target.value as Stato['tipo'])} aria-label="Tipo di reddito">
+            <option value="">Scegli…</option>
+            <option value="dip">Dipendente</option>
+            <option value="aut">Autonomo (regime ordinario)</option>
+            <option value="forf">Autonomo forfettario</option>
+          </select>
+        </label>
         {forfettario && <p className="nota">Regime forfettario: come nella pagina Alleata, nessun risparmio fiscale e nessuna imposta finale sulle prestazioni. ⚠️ DA VERIFICARE.</p>}
         {s.tipo === 'aut' && <p className="nota">Autonomo in regime ordinario: il risparmio fiscale si calcola sul reddito che indichi, con l’IRPEF e l’addizionale della pagina Alleata (senza TFR).</p>}
         {autonomo ? (
@@ -199,11 +202,15 @@ export function Preventivo({ dati }: { dati: DatasetCovip }) {
         ) : s.tipo === 'dip' ? (
           <>
             <div className="griglia">{campo('netto', 'Stipendio netto mensile (€)', 'importo')}</div>
-            <div className="seg" role="group" aria-label="Mensilità">
-              {(['13', '14', '15'] as const).map((m) => (
-                <button key={m} className={s.mensilita === m ? 'on' : ''} onClick={() => set('mensilita', m)}>{m} mensilità</button>
-              ))}
-            </div>
+            <label className="campo">
+              <span>Mensilità</span>
+              <select value={s.mensilita} onChange={(e) => set('mensilita', e.target.value as Stato['mensilita'])} aria-label="Mensilità">
+                <option value="">Scegli…</option>
+                <option value="13">13 mensilità</option>
+                <option value="14">14 mensilità</option>
+                <option value="15">15 mensilità</option>
+              </select>
+            </label>
           </>
         ) : null}
       </section>
