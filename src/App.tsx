@@ -37,7 +37,7 @@ export function App() {
   const [scheda, setScheda] = useState<Scheda>('costi');
   const [gCosti, setGCosti] = useState<Gruppo>('pip');
   const [gRend, setGRend] = useState<Gruppo>('pip');
-  const { dati, avviso, importa, rimuovi, azzera } = useCovip();
+  const { dati, avviso, importa, rimuovi, azzera, haDatiUtente } = useCovip();
   const vaiAiDati = () => setScheda('dati');
   const corrente = SCHEDE.find((s) => s.id === scheda)!;
 
@@ -61,7 +61,7 @@ export function App() {
         )}
         {scheda === 'comb' && <Combinata dati={dati} vaiAiDati={vaiAiDati} />}
         {scheda === 'prev' && <Preventivo dati={dati} />}
-        {scheda === 'dati' && <Dati dati={dati} avviso={avviso} onImporta={importa} onRimuovi={rimuovi} onAzzera={azzera} />}
+        {scheda === 'dati' && <Dati dati={dati} avviso={avviso} onImporta={importa} onRimuovi={rimuovi} onAzzera={azzera} haDatiUtente={haDatiUtente} />}
         <Avviso />
       </main>
       <nav aria-label="Sezioni">
