@@ -9,7 +9,7 @@ export type { TipoFile } from '../data/tipi';
 export type Cella = string | number | boolean | Date | null | undefined;
 export type Riga = Cella[];
 
-export type Campo = 'societa' | 'fondo' | 'comparto' | 'categoria' | 'anni' | 'valore' | 'y1' | 'y2' | 'y3' | 'y5' | 'y10' | 'y20' | 'y35';
+export type Campo = 'societa' | 'fondo' | 'comparto' | 'categoria' | 'variante' | 'anni' | 'valore' | 'y1' | 'y2' | 'y3' | 'y5' | 'y10' | 'y20' | 'y35';
 export type Abbinamento = Partial<Record<Campo, number>>;
 
 export const CAMPI_ANAGRAFICA: { campo: Campo; nome: string }[] = [
@@ -17,6 +17,7 @@ export const CAMPI_ANAGRAFICA: { campo: Campo; nome: string }[] = [
   { campo: 'fondo', nome: 'Fondo / piano' },
   { campo: 'comparto', nome: 'Comparto' },
   { campo: 'categoria', nome: 'Categoria (tipologia)' },
+  { campo: 'variante', nome: 'Platea (se presente)' },
 ];
 export const ANNI_PER_TIPO: Record<TipoFile, number[]> = { isc: [2, 5, 10, 35], rend: [1, 3, 5, 10, 20] };
 
@@ -79,9 +80,20 @@ export function suggerisci(titoli: string[], tipo: TipoFile, dati: Riga[] = []):
     if (i >= 0) ab[c] = i;
   };
   set('societa', trova(/societ|gestore|compagnia|impresa|ente|ragione sociale|istituto|banca|\bsgr\b|\bsim\b/));
-  set('comparto', trova(/^(?!.*categ).*(compart|linea|profilo|gestione)/));
+  {
+    const re = /^(?!.*(categ|\bcod\b)).*(compart|linea|profilo|gestione)/;
+    const campione = dati.slice(0, 200);
+    const cand = h.map((t, i) => ({ t, i })).filter(({ t, i }) => re.test(t) && !usata(i));
+    // Se più colonne si chiamano "comparto", vale quella che contiene testo (non codici numerici).
+    const testuale = cand.find(({ i }) => {
+      const v = campione.map((r) => r[i]).filter((x) => testoCella(x) !== '');
+      return v.length >= 3 && v.filter((x) => numeroCella(x) === null).length / v.length >= 0.8;
+    });
+    set('comparto', (testuale ?? cand[0])?.i ?? -1);
+  }
   set('fondo', trova(/\b(fondo|piano|pip)\b|denominazione|forma pensionistica|\bnome\b/));
   set('categoria', trova(/categ|tipologia|tipo comparto|tipo di comparto|classe|politica/));
+  set('variante', trova(/platea/));
 
   const parola = tipo === 'isc' ? /isc|cost|indicatore/ : /rend/;
   const opposta = tipo === 'isc' ? /rend/ : /isc|cost|indicatore/;
@@ -150,7 +162,10 @@ export function analizza(righe: Riga[], tipo: TipoFile): Analisi {
       if (!best || p > best.punteggio) best = { primaIntest: da, ultimaIntest: a, titoli, ab, punteggio: p, riconosciuto: false, incerto: false, periodi: {} };
     }
   }
+  const periodoLike = (riga?: Riga) => (riga ?? []).filter((c) => /^\d{4}\s*[-–]\s*\d{4}$/.test(testoCella(c))).length;
   const r = best ?? { primaIntest: 0, ultimaIntest: 0, titoli: [], ab: {}, punteggio: 0, riconosciuto: false, incerto: false, periodi: {} };
+  // Le righe con i periodi (es. 2023-2025) sotto i titoli sono ancora intestazione.
+  while (r.ultimaIntest + 1 < righe.length && periodoLike(righe[r.ultimaIntest + 1]) >= 2) r.ultimaIntest++;
   const dati = righe.slice(r.ultimaIntest + 1, r.ultimaIntest + 200);
   // Comparto non trovato dai titoli: prima colonna di testo (da confermare).
   if (r.ab.comparto === undefined && r.ab.fondo === undefined) {
@@ -229,6 +244,16 @@ export function costruisci(righe: Riga[], ultimaIntest: number, ab: Abbinamento,
   };
   const mappa = new Map<string, Comparto>();
   let scartate = 0;
+  // Se lo stesso comparto compare più volte con platee diverse (es. lavoratori dipendenti / autonomi), si tengono separati.
+  const ripetizioni = new Map<string, number>();
+  if (ab.variante !== undefined) {
+    let f = '';
+    for (const r of righe.slice(ultimaIntest + 1)) {
+      if (testo(r, ab.fondo)) f = testo(r, ab.fondo);
+      const cmp = testo(r, ab.comparto);
+      if (cmp) ripetizioni.set(`${f}|${cmp}`, (ripetizioni.get(`${f}|${cmp}`) ?? 0) + 1);
+    }
+  }
   // Società e piano scritti solo sulla prima riga di un gruppo (celle unite): si ripetono finché non cambiano.
   let ultimaSocieta = '';
   let ultimoFondo = '';
@@ -239,15 +264,19 @@ export function costruisci(righe: Riga[], ultimaIntest: number, ab: Abbinamento,
     if (societa0) ultimaSocieta = societa0;
     if (fondo0) ultimoFondo = fondo0;
     const haDati = comparto0 !== '' || (ab.comparto === undefined && fondo0 !== '');
-    const comparto = comparto0;
-    const fondo = haDati ? fondo0 || ultimoFondo : '';
-    const societa = haDati ? societa0 || ultimaSocieta : '';
     if (!haDati) {
       if (r.some((c) => c !== null && c !== undefined && c !== '')) scartate++;
       continue;
     }
-    const c0: Comparto = { id: '', forma, societa, fondo: fondo || societa, comparto: comparto || fondo, categoria: categoriaDaTesto(testo(r, ab.categoria)), isc: {}, rend: {} };
-    c0.id = chiave(forma, c0);
+    const fondo = fondo0 || ultimoFondo;
+    const societa = societa0 || ultimaSocieta;
+    const variante = testo(r, ab.variante);
+    const separa = variante !== '' && (ripetizioni.get(`${fondo}|${comparto0}`) ?? 0) > 1;
+    const nome = comparto0 || fondo;
+    const base: Comparto = { id: '', forma, societa, fondo: fondo || societa, comparto: nome, categoria: categoriaDaTesto(testo(r, ab.categoria)), isc: {}, rend: {} };
+    const idBase = chiave(forma, base);
+    const c0: Comparto = separa ? { ...base, comparto: `${nome} (${variante})`, base: idBase } : base;
+    c0.id = separa ? chiave(forma, c0) : idBase;
     const c = mappa.get(c0.id) ?? c0;
     const dest = (tipo === 'isc' ? c.isc : c.rend) as Record<number, number | null>;
     if (ab.anni !== undefined && ab.valore !== undefined) {
@@ -271,13 +300,21 @@ export function costruisci(righe: Riga[], ultimaIntest: number, ab: Abbinamento,
  */
 export function unisci(esistenti: Comparto[], nuovi: Comparto[], tipo: TipoFile): Comparto[] {
   const mappa = new Map(esistenti.map((c) => [c.id, c]));
+  const perBase = new Map<string, string[]>();
+  const registra = (c: Comparto) => perBase.set(c.base ?? c.id, [...(perBase.get(c.base ?? c.id) ?? []), c.id]);
+  esistenti.forEach(registra);
+  const fondi = (e: Comparto, n: Comparto): Comparto => {
+    // Una categoria generica (OBB) non sostituisce una più precisa (OBB PURO / OBB MISTO).
+    const categoria = n.categoria === 'OBB' && e.categoria && e.categoria !== 'OBB' ? e.categoria : n.categoria ?? e.categoria;
+    return { ...e, categoria, ...(tipo === 'isc' ? { isc: n.isc } : { rend: n.rend }) };
+  };
   for (const n of nuovi) {
-    const e = mappa.get(n.id);
-    if (!e) mappa.set(n.id, n);
+    // Un comparto senza platea (es. rendimenti) vale per tutte le sue varianti per platea (es. costi dipendenti / autonomi).
+    const bersagli = mappa.has(n.id) ? [n.id] : !n.base ? perBase.get(n.id) ?? [] : [];
+    if (bersagli.length) for (const id of bersagli) mappa.set(id, fondi(mappa.get(id)!, n));
     else {
-      // Una categoria generica (OBB) non sostituisce una più precisa (OBB PURO / OBB MISTO).
-      const categoria = n.categoria === 'OBB' && e.categoria && e.categoria !== 'OBB' ? e.categoria : n.categoria ?? e.categoria;
-      mappa.set(n.id, { ...e, categoria, ...(tipo === 'isc' ? { isc: n.isc } : { rend: n.rend }) });
+      mappa.set(n.id, n);
+      registra(n);
     }
   }
   return [...mappa.values()];

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { filtra, ordina, media, medieperCategoria, scostoDallaMedia, valore, isAlleata, lineaAlleata } from './stats';
+import { corrisponde, filtra, ordina, media, medieperCategoria, scostoDallaMedia, valore, isAlleata, lineaAlleata } from './stats';
 import type { Comparto } from '../data/tipi';
 
 const mk = (id: string, categoria: Comparto['categoria'], isc2: number | null, r5: number | null, extra: Partial<Comparto> = {}): Comparto => ({
@@ -38,5 +38,16 @@ describe('stats', () => {
     expect(isAlleata(a)).toBe(true);
     expect(lineaAlleata(a)).toBe('g');
     expect(isAlleata(L[0])).toBe(false);
+  });
+  it('la ricerca per parole non richiede parole contigue né un ordine', () => {
+    const c = mk('7', 'AZN', 1, 1, { societa: 'ALLEANZA SPA', fondo: 'ALMEGLIO FONDO PENSIONE APERTO', comparto: 'AZIONARIO' });
+    expect(corrisponde(c, 'almeglio azionario')).toBe(true);
+    expect(corrisponde(c, 'azionario alleanza')).toBe(true);
+    expect(corrisponde(c, 'almeglio bilanciato')).toBe(false);
+    expect(corrisponde(c, '  ')).toBe(true);
+    const o = mk('8', 'OBB PURO', 1, 1, { comparto: 'OBBLIGAZIONARIO' });
+    expect(corrisponde(o, 'azionario')).toBe(false);
+    expect(corrisponde(o, 'obbligaz')).toBe(true);
+    expect(corrisponde(mk('9', 'GAR', 1, 1, { comparto: "STABILITA'" }), "stabilita'")).toBe(true);
   });
 });

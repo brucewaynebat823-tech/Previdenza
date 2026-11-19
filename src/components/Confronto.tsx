@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { NOME_FORMA, chiaveFile, type Categoria, type Comparto, type DatasetCovip, type FormaTipo } from '../data/tipi';
-import { filtra, isAlleata, media, ordina, scostoDallaMedia, valore, type Metrica } from '../lib/stats';
+import { corrisponde, filtra, isAlleata, media, ordina, scostoDallaMedia, valore, type Metrica, gestore } from '../lib/stats';
 import { CATEGORIE, catInfo } from '../lib/categorie';
 import { dataIt, pct } from '../lib/formati';
 import { BannerCovip } from './Avvisi';
@@ -64,7 +64,7 @@ export function Confronto({ dati, forme, confrontabili, modo, vaiAiDati }: Props
   const candidati = useMemo(() => (formaScelta ? listaConfr.filter((c) => c.forma === formaScelta) : listaConfr), [listaConfr, formaScelta]);
 
   const metrica = { tipo: modo, anni } as Metrica;
-  const societaElenco = useMemo(() => [...new Set(lista.map((c) => c.societa))].filter(Boolean).sort(), [lista]);
+  const societaElenco = useMemo(() => [...new Set(lista.map((c) => gestore(c)))].filter(Boolean).sort(), [lista]);
   const base = useMemo(() => filtra(lista, { forme: forma ? [forma] : undefined, societa, testo }), [lista, forma, societa, testo]);
   const filtrati = useMemo(
     () => ordina(cat === '' ? base : base.filter((c) => (c.categoria ?? 'ND') === cat), metrica, verso),
@@ -90,9 +90,9 @@ export function Confronto({ dati, forme, confrontabili, modo, vaiAiDati }: Props
   const suggerimenti = useMemo(() => {
     const t = cerca.trim().toLowerCase();
     if (!t) return [];
-    return candidati.filter((c) => !scelti.includes(c.id) && `${c.societa} ${c.fondo} ${c.comparto}`.toLowerCase().includes(t)).slice(0, 8);
+    return candidati.filter((c) => !scelti.includes(c.id) && corrisponde(c, t)).slice(0, 8);
   }, [cerca, candidati, scelti]);
-  const elencoCompleto = useMemo(() => [...candidati].sort((a, b) => `${a.societa} ${a.comparto}`.localeCompare(`${b.societa} ${b.comparto}`, 'it')), [candidati]);
+  const elencoCompleto = useMemo(() => [...candidati].sort((a, b) => `${gestore(a)} ${a.comparto}`.localeCompare(`${gestore(b)} ${b.comparto}`, 'it')), [candidati]);
   const aggiungi = (id: string) => {
     if (id && !scelti.includes(id) && scelti.length < MAX) setScelti([...scelti, id]);
     setCerca('');
@@ -124,7 +124,7 @@ export function Confronto({ dati, forme, confrontabili, modo, vaiAiDati }: Props
       <td>
         {c.comparto}
         <small>
-          {c.societa} · {NOME_FORMA[c.forma]}
+          {gestore(c)} · {NOME_FORMA[c.forma]}
         </small>
         {!raggruppa && <CatBadge cat={c.categoria} />}
       </td>
@@ -257,7 +257,7 @@ export function Confronto({ dati, forme, confrontabili, modo, vaiAiDati }: Props
               <li key={c.id}>
                 <button className="sec" onClick={() => aggiungi(c.id)}>
                   {c.comparto}
-                  <small>{c.societa} · {NOME_FORMA[c.forma]} · {catInfo(c.categoria).nome}</small>
+                  <small>{gestore(c)} · {NOME_FORMA[c.forma]} · {catInfo(c.categoria).nome}</small>
                 </button>
               </li>
             ))}
@@ -267,7 +267,7 @@ export function Confronto({ dati, forme, confrontabili, modo, vaiAiDati }: Props
         <select value="" onChange={(e) => aggiungi(e.target.value)} aria-label="Scegli un fondo dall’elenco" disabled={scelti.length >= MAX}>
           <option value="">Oppure scegli dall’elenco…</option>
           {elencoCompleto.filter((c) => !scelti.includes(c.id)).map((c) => (
-            <option key={c.id} value={c.id}>{c.comparto} — {c.societa}</option>
+            <option key={c.id} value={c.id}>{c.comparto} — {gestore(c)}</option>
           ))}
         </select>
         {scelti.length > 0 && (
@@ -289,7 +289,7 @@ export function Confronto({ dati, forme, confrontabili, modo, vaiAiDati }: Props
             {confronto.map((c) => (
               <div key={c.id} className={'colonna' + (isAlleata(c) ? ' alleata' : '')}>
                 <b>{c.comparto}</b>
-                <small>{c.societa}</small>
+                <small>{gestore(c)}</small>
                 <small><b>{NOME_TIPO[c.forma]}</b></small>
                 <CatBadge cat={c.categoria} />
                 <div className="grande">

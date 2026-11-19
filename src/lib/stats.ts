@@ -14,14 +14,25 @@ export interface Filtri {
   testo?: string;
 }
 
+/** Chi gestisce il comparto: la società, oppure il nome del fondo quando il file non ha la società (es. fondi negoziali). */
+export const gestore = (c: Comparto) => c.societa || c.fondo;
+
+/** Ricerca per parole: ogni parola scritta deve comparire, all'inizio di una parola e in qualsiasi ordine, in società, fondo o comparto (così "azionario" non trova "obbligazionario"). */
+export function corrisponde(c: Comparto, testo: string): boolean {
+  const parole = testo.toLowerCase().replace(/[^\p{L}\p{N}%+]+/gu, ' ').split(' ').filter(Boolean);
+  if (!parole.length) return true;
+  const pagliaio = ` ${c.societa} ${c.fondo} ${c.comparto}`.toLowerCase().replace(/[^\p{L}\p{N}%+]+/gu, ' ');
+  return parole.every((w) => pagliaio.includes(` ${w}`));
+}
+
 export function filtra(lista: Comparto[], f: Filtri): Comparto[] {
   const t = f.testo?.trim().toLowerCase();
   return lista.filter(
     (c) =>
       (!f.forme?.length || f.forme.includes(c.forma)) &&
-      (!f.societa || c.societa === f.societa) &&
+      (!f.societa || gestore(c) === f.societa) &&
       (!f.categoria || c.categoria === f.categoria) &&
-      (!t || `${c.societa} ${c.fondo} ${c.comparto}`.toLowerCase().includes(t)),
+      (!t || corrisponde(c, t)),
   );
 }
 

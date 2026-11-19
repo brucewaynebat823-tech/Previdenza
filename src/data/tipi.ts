@@ -6,6 +6,8 @@ export type TipoFile = 'isc' | 'rend';
 
 export interface Comparto {
   id: string;
+  /** Se lo stesso comparto compare per più platee (es. lavoratori dipendenti / autonomi), chiave del comparto senza la platea. */
+  base?: string;
   forma: FormaTipo;
   societa: string;
   fondo: string;

@@ -188,7 +188,7 @@ export function CaricaFile({ forma, tipo, onImporta, onChiudi }: Props) {
                       <tbody>
                         {anteprima.comparti.slice(0, 3).map((c) => (
                           <tr key={c.id}>
-                            <td>{c.comparto}<small>{c.societa}{c.categoria ? '' : ' · tipologia non indicata'}</small></td>
+                            <td>{c.comparto}<small>{c.societa || c.fondo}{c.categoria ? '' : ' · tipologia non indicata'}</small></td>
                             <td className="n">{ANNI_PER_TIPO[tipo].map((x) => `${x}a: ${((tipo === 'isc' ? c.isc[x as 2] : c.rend[x as 1]) ?? '—').toString().replace('.', ',')}`).join(' · ')}</td>
                           </tr>
                         ))}
