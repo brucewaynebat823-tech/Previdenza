@@ -35,6 +35,7 @@ export function Confronto({ dati, forme, modo }: Props) {
   const [testo, setTesto] = useState('');
   const [verso, setVerso] = useState<'asc' | 'desc'>(modo === 'isc' ? 'asc' : 'desc');
   const [scelti, setScelti] = useState<string[]>([]);
+  const [cerca, setCerca] = useState('');
 
   const metrica = { tipo: modo, anni } as Metrica;
   const societaElenco = useMemo(() => [...new Set(lista.map((c) => c.societa))].sort(), [lista]);
@@ -49,6 +50,17 @@ export function Confronto({ dati, forme, modo }: Props) {
   const anniOpz = modo === 'isc' ? ANNI_ISC : ANNI_REND;
   const periodo = dati.periodoRendimenti;
 
+  const MAX = 4;
+  const suggerimenti = useMemo(() => {
+    const t = cerca.trim().toLowerCase();
+    if (!t) return [];
+    return lista.filter((c) => !scelti.includes(c.id) && `${c.societa} ${c.fondo} ${c.comparto}`.toLowerCase().includes(t)).slice(0, 8);
+  }, [cerca, lista, scelti]);
+  const elencoCompleto = useMemo(() => [...lista].sort((a, b) => `${a.societa} ${a.comparto}`.localeCompare(`${b.societa} ${b.comparto}`, 'it')), [lista]);
+  const aggiungi = (id: string) => {
+    if (id && !scelti.includes(id) && scelti.length < MAX) setScelti([...scelti, id]);
+    setCerca('');
+  };
   const toggle = (id: string) => setScelti((s) => (s.includes(id) ? s.filter((x) => x !== id) : s.length >= 4 ? s : [...s, id]));
 
   if (!lista.length)
@@ -145,6 +157,40 @@ export function Confronto({ dati, forme, modo }: Props) {
         </section>
       )}
 
+      <section className="card">
+        <h3>Scegli i fondi da confrontare</h3>
+        <p className="nota">Cerca per nome o scegli dall’elenco (massimo {MAX}). Vale su tutti i comparti disponibili, indipendentemente dai filtri sopra.</p>
+        <input type="search" placeholder="Cerca un fondo o una società…" value={cerca} onChange={(e) => setCerca(e.target.value)} aria-label="Cerca fondo da confrontare" disabled={scelti.length >= MAX} />
+        {suggerimenti.length > 0 && (
+          <ul className="suggerimenti">
+            {suggerimenti.map((c) => (
+              <li key={c.id}>
+                <button className="sec" onClick={() => aggiungi(c.id)}>
+                  {c.comparto}
+                  <small>{c.societa} · {NOME_FORMA[c.forma]}{c.categoria ? ` · ${c.categoria}` : ''}</small>
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+        {cerca.trim() && suggerimenti.length === 0 && <p className="nota">Nessun comparto trovato.</p>}
+        <select value="" onChange={(e) => aggiungi(e.target.value)} aria-label="Scegli un fondo dall’elenco" disabled={scelti.length >= MAX}>
+          <option value="">Oppure scegli dall’elenco…</option>
+          {elencoCompleto.filter((c) => !scelti.includes(c.id)).map((c) => (
+            <option key={c.id} value={c.id}>{c.comparto} — {c.societa}</option>
+          ))}
+        </select>
+        {scelti.length > 0 && (
+          <div className="chips">
+            {confronto.map((c) => (
+              <button key={c.id} className="chip" onClick={() => toggle(c.id)} aria-label={`Togli ${c.comparto}`}>{c.comparto} ✕</button>
+            ))}
+            <button className="link" onClick={() => setScelti([])}>Svuota</button>
+          </div>
+        )}
+        {scelti.length >= MAX && <p className="nota">Hai raggiunto il massimo di {MAX} fondi: toglierne uno per aggiungerne altri.</p>}
+      </section>
+
       {confronto.length > 0 && (
         <section className="card">
           <h3>Confronto affiancato</h3>
@@ -199,7 +245,7 @@ export function Confronto({ dati, forme, modo }: Props) {
             </tbody>
           </table>
         </div>
-        <p className="nota">Seleziona fino a 4 comparti per il confronto affiancato.</p>
+        <p className="nota">Spunta i comparti per aggiungerli al confronto (massimo {MAX}).</p>
       </section>
     </>
   );
