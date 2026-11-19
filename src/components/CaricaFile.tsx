@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { NOME_FORMA, type FileMeta, type FormaTipo, type TipoFile } from '../data/tipi';
-import { ANNI_PER_TIPO, CAMPI_ANAGRAFICA, costruisci, rilevaIntestazione, suggerisci, type Abbinamento, type Campo, type Riga } from '../lib/importa';
+import { ANNI_PER_TIPO, CAMPI_ANAGRAFICA, analizza, costruisci, suggerisci, titoliColonne, type Abbinamento, type Analisi, type Campo, type Riga } from '../lib/importa';
 import type { Comparto } from '../data/tipi';
 
 interface Foglio {
@@ -45,9 +45,13 @@ export function CaricaFile({ forma, tipo, onImporta, onChiudi }: Props) {
   const [nomeFile, setNomeFile] = useState('');
   const [errore, setErrore] = useState('');
   const [foglio, setFoglio] = useState(0);
-  const [intest, setIntest] = useState(0);
+  const [analisi, setAnalisi] = useState<Analisi | null>(null);
+  const [da, setDa] = useState(0);
+  const [a, setA] = useState(0);
   const [ab, setAb] = useState<Abbinamento>({});
   const [modifica, setModifica] = useState(false);
+  const [frazioni, setFrazioni] = useState(false);
+  const [okIncerto, setOkIncerto] = useState(false);
   const [aggiornatoAl, setAggiornatoAl] = useState('');
   const [dal, setDal] = useState('');
   const [al, setAl] = useState('');
@@ -56,9 +60,20 @@ export function CaricaFile({ forma, tipo, onImporta, onChiudi }: Props) {
   const titolo = `${tipo === 'isc' ? 'Costi (ISC)' : 'Rendimenti'} · ${NOME_FORMA[forma]}`;
 
   function riparti(data: Riga[]) {
-    const h = rilevaIntestazione(data);
-    setIntest(h);
-    setAb(suggerisci(data[h] ?? [], tipo));
+    const an = analizza(data, tipo);
+    setAnalisi(an);
+    setDa(an.primaIntest);
+    setA(an.ultimaIntest);
+    setAb(an.ab);
+    setOkIncerto(false);
+    setModifica(!an.riconosciuto);
+  }
+  function ricalcolaTitoli(nuovoDa: number, nuovoA: number) {
+    const dd = Math.min(nuovoDa, nuovoA);
+    setDa(dd);
+    setA(nuovoA);
+    setAb(suggerisci(titoliColonne(righe, dd, nuovoA), tipo, righe.slice(nuovoA + 1)));
+    setOkIncerto(true);
   }
 
   async function scegli(f: File | undefined) {
@@ -75,22 +90,30 @@ export function CaricaFile({ forma, tipo, onImporta, onChiudi }: Props) {
       if (!out.length) throw new Error('vuoto');
       setFogli(out);
       setNomeFile(f.name);
-      setFoglio(0);
-      riparti(out[0].data);
+      const an = out.map((x) => analizza(x.data, tipo));
+      let best = 0;
+      an.forEach((x, i) => {
+        if (x.riconosciuto > an[best].riconosciuto || (x.riconosciuto === an[best].riconosciuto && x.punteggio > an[best].punteggio)) best = i;
+      });
+      setFoglio(best);
+      riparti(out[best].data);
     } catch {
       setErrore('Non riesco a leggere questo file. Serve un file Excel (.xlsx) o .csv scaricato da COVIP: i PDF non vanno bene.');
     }
   }
 
-  const colonne = (righe[intest] ?? []).map((c, i) => ({ i, nome: String(c ?? '').trim() || `(colonna ${i + 1})` }));
+  const titoli = useMemo(() => titoliColonne(righe, da, a), [righe, da, a]);
+  const colonne = titoli.map((t, i) => ({ i, nome: t || `(colonna ${i + 1})` }));
   const nomeCol = (i?: number) => (i === undefined ? undefined : colonne.find((c) => c.i === i)?.nome);
-  const anteprima = useMemo(() => (fogli.length ? costruisci(righe, intest, ab, tipo, forma) : null), [fogli, righe, intest, ab, tipo, forma]);
-  const anniOk = ANNI_PER_TIPO[tipo].filter((a) => ab[`y${a}` as Campo] !== undefined);
-  const riconosciuto = (ab.comparto !== undefined || ab.fondo !== undefined) && anniOk.length > 0;
+  const anteprima = useMemo(() => (fogli.length ? costruisci(righe, a, ab, tipo, forma, { moltiplica100: frazioni }) : null), [fogli, righe, a, ab, tipo, forma, frazioni]);
+  const haValori = ANNI_PER_TIPO[tipo].some((x) => ab[`y${x}` as Campo] !== undefined) || (ab.anni !== undefined && ab.valore !== undefined);
+  const riconosciuto = (ab.comparto !== undefined || ab.fondo !== undefined) && haValori;
+  const incerto = !!analisi?.incerto && !okIncerto;
 
   const problemi: string[] = [];
   if (fogli.length) {
-    if (!riconosciuto) problemi.push('Non ho riconosciuto le colonne: apri “Controlla le colonne” e abbinale.');
+    if (!riconosciuto) problemi.push('Abbina almeno il comparto (o fondo) e le colonne dei valori in “Controlla le colonne”.');
+    else if (incerto) problemi.push('Ho abbinato le colonne per posizione, non dai titoli: controllale e spunta “Le colonne sono giuste”.');
     if (!aggiornatoAl) problemi.push('Indica la data di aggiornamento dei dati (la trovi sulla pagina COVIP o nel file).');
     if (tipo === 'rend' && (!dal || !al)) problemi.push('Indica il periodo dei rendimenti (dal / al).');
     if (anteprima && anteprima.comparti.length === 0) problemi.push('Nessuna riga valida con questo abbinamento.');
@@ -125,36 +148,46 @@ export function CaricaFile({ forma, tipo, onImporta, onChiudi }: Props) {
             <span className="num">2</span>
             <div style={{ minWidth: 0, flex: 1 }}>
               <b>Controlla e conferma</b>
-              <p className={riconosciuto ? 'ok' : 'warn'}>
-                {riconosciuto
-                  ? `✓ Colonne riconosciute: ${anteprima.comparti.length} comparti trovati in “${nomeFile}”.`
-                  : '⚠️ Non ho riconosciuto le colonne del file.'}
-              </p>
-              {anteprima.comparti.length > 0 && (
-                <div className="scroll">
-                  <table>
-                    <tbody>
-                      {anteprima.comparti.slice(0, 3).map((c) => (
-                        <tr key={c.id}>
-                          <td>{c.comparto}<small>{c.societa} · {c.categoria ? '' : 'tipologia non indicata'}</small></td>
-                          <td className="n">{ANNI_PER_TIPO[tipo].map((a) => `${a}a: ${((tipo === 'isc' ? c.isc[a as 2] : c.rend[a as 1]) ?? '—').toString().replace('.', ',')}`).join(' · ')}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+              {riconosciuto && !analisi?.incerto ? (
+                <p className="ok">✓ Colonne riconosciute: {anteprima.comparti.length} comparti trovati in “{nomeFile}”.</p>
+              ) : (
+                <p className="warn">
+                  ⚠️ {riconosciuto ? 'Ho abbinato le colonne per posizione: controlla che siano giuste.' : 'Non ho riconosciuto tutte le colonne: abbinale tu con i menù qui sotto.'}
+                </p>
               )}
 
-              <h4>Data dei dati</h4>
-              <div className="griglia">
-                <label className="campo"><span>Aggiornati al</span><input type="date" value={aggiornatoAl} onChange={(e) => setAggiornatoAl(e.target.value)} /></label>
-                {tipo === 'rend' && (
-                  <>
-                    <label className="campo"><span>Periodo: dal</span><input type="date" value={dal} onChange={(e) => setDal(e.target.value)} /></label>
-                    <label className="campo"><span>Periodo: al</span><input type="date" value={al} onChange={(e) => setAl(e.target.value)} /></label>
-                  </>
-                )}
+              <h4>Com’è fatto il file</h4>
+              <div className="scroll">
+                <table className="tabfile">
+                  <tbody>
+                    {righe.slice(0, 8).map((r, i) => (
+                      <tr key={i} className={i >= da && i <= a ? 'tit' : ''}>
+                        <td className="sub">{i + 1}</td>
+                        {r.slice(0, 7).map((c, j) => <td key={j}>{String(c ?? '').slice(0, 22)}</td>)}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
+              <p className="nota">Le righe evidenziate sono i titoli delle colonne.</p>
+
+              {anteprima.comparti.length > 0 && (
+                <>
+                  <h4>Anteprima dei dati ({anteprima.comparti.length} comparti)</h4>
+                  <div className="scroll">
+                    <table>
+                      <tbody>
+                        {anteprima.comparti.slice(0, 3).map((c) => (
+                          <tr key={c.id}>
+                            <td>{c.comparto}<small>{c.societa}{c.categoria ? '' : ' · tipologia non indicata'}</small></td>
+                            <td className="n">{ANNI_PER_TIPO[tipo].map((x) => `${x}a: ${((tipo === 'isc' ? c.isc[x as 2] : c.rend[x as 1]) ?? '—').toString().replace('.', ',')}`).join(' · ')}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </>
+              )}
 
               <button className="link" onClick={() => setModifica(!modifica)}>{modifica ? 'Nascondi' : 'Controlla le colonne'}</button>
               {modifica && (
@@ -167,28 +200,56 @@ export function CaricaFile({ forma, tipo, onImporta, onChiudi }: Props) {
                       </select>
                     </label>
                   )}
-                  <label className="campo">
-                    <span>Riga con i titoli</span>
-                    <select value={intest} onChange={(e) => { const n = Number(e.target.value); setIntest(n); setAb(suggerisci(righe[n] ?? [], tipo)); }}>
-                      {righe.slice(0, 15).map((r, i) => <option key={i} value={i}>Riga {i + 1}: {r.filter(Boolean).slice(0, 3).join(' · ').slice(0, 40)}</option>)}
-                    </select>
-                  </label>
-                  {[...CAMPI_ANAGRAFICA, ...ANNI_PER_TIPO[tipo].map((a) => ({ campo: `y${a}` as Campo, nome: tipo === 'isc' ? `ISC a ${a} anni` : `Rendimento a ${a} anni` }))].map(({ campo, nome }) => (
+                  <div className="griglia">
+                    <label className="campo">
+                      <span>Titoli: dalla riga</span>
+                      <select value={da} onChange={(e) => ricalcolaTitoli(Number(e.target.value), Math.max(a, Number(e.target.value)))}>
+                        {righe.slice(0, 20).map((_, i) => <option key={i} value={i}>{i + 1}</option>)}
+                      </select>
+                    </label>
+                    <label className="campo">
+                      <span>fino alla riga</span>
+                      <select value={a} onChange={(e) => ricalcolaTitoli(Math.min(da, Number(e.target.value)), Number(e.target.value))}>
+                        {righe.slice(0, 20).map((_, i) => <option key={i} value={i}>{i + 1}</option>)}
+                      </select>
+                    </label>
+                  </div>
+                  {[
+                    ...CAMPI_ANAGRAFICA,
+                    ...ANNI_PER_TIPO[tipo].map((x) => ({ campo: `y${x}` as Campo, nome: tipo === 'isc' ? `ISC a ${x} anni` : `Rendimento a ${x} anni` })),
+                    { campo: 'anni' as Campo, nome: 'Colonna “anni” (solo se una riga per anno)' },
+                    { campo: 'valore' as Campo, nome: 'Colonna del valore (solo se una riga per anno)' },
+                  ].map(({ campo, nome }) => (
                     <label key={campo} className="campo riga-ab">
                       <span>{nome}</span>
-                      <select value={ab[campo] ?? ''} onChange={(e) => setAb({ ...ab, [campo]: e.target.value === '' ? undefined : Number(e.target.value) })}>
+                      <select value={ab[campo] ?? ''} onChange={(e) => { setAb({ ...ab, [campo]: e.target.value === '' ? undefined : Number(e.target.value) }); setOkIncerto(false); }}>
                         <option value="">— non presente —</option>
                         {colonne.map((c) => <option key={c.i} value={c.i}>{c.nome}</option>)}
                       </select>
                     </label>
                   ))}
+                  <label className="check piccolo">
+                    <input type="checkbox" checked={frazioni} onChange={(e) => setFrazioni(e.target.checked)} /> I valori sono frazioni (es. 0,012 = 1,2%): moltiplica per 100
+                  </label>
                 </div>
               )}
-              {!modifica && riconosciuto && (
-                <p className="nota">
-                  {[nomeCol(ab.societa) && `Società = “${nomeCol(ab.societa)}”`, nomeCol(ab.comparto) && `Comparto = “${nomeCol(ab.comparto)}”`, nomeCol(ab.categoria) && `Tipologia = “${nomeCol(ab.categoria)}”`].filter(Boolean).join(' · ')}
-                </p>
+
+              {analisi?.incerto && (
+                <label className="check piccolo">
+                  <input type="checkbox" checked={okIncerto} onChange={(e) => setOkIncerto(e.target.checked)} /> Le colonne sono giuste
+                </label>
               )}
+
+              <h4>Data dei dati</h4>
+              <div className="griglia">
+                <label className="campo"><span>Aggiornati al</span><input type="date" value={aggiornatoAl} onChange={(e) => setAggiornatoAl(e.target.value)} /></label>
+                {tipo === 'rend' && (
+                  <>
+                    <label className="campo"><span>Periodo: dal</span><input type="date" value={dal} onChange={(e) => setDal(e.target.value)} /></label>
+                    <label className="campo"><span>Periodo: al</span><input type="date" value={al} onChange={(e) => setAl(e.target.value)} /></label>
+                  </>
+                )}
+              </div>
 
               {problemi.length > 0 && <ul className="errori">{problemi.map((p) => <li key={p}>{p}</li>)}</ul>}
               <button disabled={problemi.length > 0} onClick={conferma}>Salva sul dispositivo</button>
