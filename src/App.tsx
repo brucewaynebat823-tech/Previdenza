@@ -5,6 +5,7 @@ import { Confronto } from './components/Confronto';
 import { Combinata } from './components/Combinata';
 import { Preventivo } from './components/Preventivo';
 import { Dati } from './components/Dati';
+import { SchedePreesistenti } from './components/SchedePreesistenti';
 import { FORME_ALTRE, FORME_TUTTE, type FormaTipo } from './data/tipi';
 
 const SCHEDE = [
@@ -60,6 +61,7 @@ export function App() {
           <>
             <Scelta valore={gCosti} opzioni={['pip', 'altre']} onCambia={setGCosti} />
             <Confronto key={'costi' + gCosti} dati={dati} forme={GRUPPI[gCosti].forme} confrontabili={gCosti === 'altre' ? FORME_TUTTE : undefined} modo="isc" vaiAiDati={vaiAiDati} />
+            {gCosti === 'altre' && <SchedePreesistenti dati={dati} />}
           </>
         )}
         {scheda === 'rend' && (
