@@ -7,8 +7,10 @@ export interface InputPreventivo {
   /** Reddito annuo lordo (RAL) o reddito lordo del forfettario. */
   redditoLordo: number;
   forfettario: boolean;
-  /** Rendimento annuo ipotizzato, in % (es. 4 = 4%). */
+  /** Rendimento annuo ipotizzato, in % (es. 4 = 4%). Non serve se si usa il percorso per età. */
   rendimentoPct: number;
+  /** Percorso per età: rendimenti annui (in %) delle tre linee; ogni anno si usa quello della linea prevista per l'età. */
+  percorsoEta?: { azionaria: number; bilanciata: number; garantita: number };
   /** Anno di prima adesione a una forma pensionistica (per l'aliquota finale). */
   annoAdesione: number;
   /** Anno corrente (parametro per rendere il calcolo testabile). */
@@ -35,6 +37,14 @@ export interface RisultatoPreventivo {
   premiNettiDelFisco: number;
   rendimentoStimato: number;
   versamentoAnnuoTotale: number;
+  /** Rendimento annuo costante equivalente (media geometrica degli anni), in %. */
+  rendimentoEquivalentePct: number;
+}
+
+/** Rendimento (%) del percorso per età all'età indicata. */
+export function tassoPercorso(p: NonNullable<InputPreventivo['percorsoEta']>, eta: number): number {
+  const { sogliaBilanciata, sogliaGarantita } = ALLEATA.percorsoEta;
+  return eta < sogliaBilanciata ? p.azionaria : eta < sogliaGarantita ? p.bilanciata : p.garantita;
 }
 
 export function irpef(imponibile: number): number {
@@ -77,7 +87,7 @@ export function validaInput(i: Partial<InputPreventivo>): string[] {
   if (num(i.eta) && num(i.etaPensione) && i.etaPensione! <= i.eta!) e.push("L'età di pensione deve essere maggiore dell'età attuale.");
   if (!num(i.premioAnnuo) || i.premioAnnuo! < 0 || i.premioAnnuo! > 200000) e.push('Premio annuo: inserisci un importo tra 0 e 200.000 €.');
   if (!num(i.redditoLordo) || i.redditoLordo! <= 0 || i.redditoLordo! > 1000000) e.push('Reddito lordo: inserisci un importo tra 1 e 1.000.000 €.');
-  if (!num(i.rendimentoPct) || i.rendimentoPct! < -10 || i.rendimentoPct! > 20) e.push('Rendimento annuo: inserisci un valore tra -10% e 20%.');
+  if (!i.percorsoEta && (!num(i.rendimentoPct) || i.rendimentoPct! < -10 || i.rendimentoPct! > 20)) e.push('Rendimento annuo: inserisci un valore tra -10% e 20%.');
   if (!num(i.annoAdesione) || i.annoAdesione! < 1990 || i.annoAdesione! > 2100) e.push("Anno di adesione: inserisci un anno valido (da 1990).");
   else if (num(i.annoCorrente) && i.annoAdesione! > i.annoCorrente!) e.push("L'anno di prima adesione non può essere successivo all'anno in corso.");
   return e;
@@ -86,7 +96,7 @@ export function validaInput(i: Partial<InputPreventivo>): string[] {
 /** Calcolo del preventivo, trascrizione della funzione calc() della pagina Alleata (BASE, senza coperture). */
 export function calcolaPreventivo(inp: InputPreventivo): RisultatoPreventivo {
   const A = ALLEATA;
-  const r = inp.rendimentoPct / 100;
+  const r = (inp.rendimentoPct ?? 0) / 100;
   const anni = Math.max(0, inp.etaPensione - inp.eta);
   const usaTfr = !!inp.tfr && !inp.forfettario;
   const tfr = usaTfr ? inp.tfr! : undefined;
@@ -107,9 +117,10 @@ export function calcolaPreventivo(inp: InputPreventivo): RisultatoPreventivo {
   let C = iniziale;
   let fattore = 1;
   for (let d = 0; d < anni; d++) {
-    fattore *= 1 + r;
-    P = (P + premioNetto) * (1 + r);
-    C = tfr ? (C + flussoTfrNetto) * (1 + r) : C * (1 + r);
+    const rd = inp.percorsoEta ? tassoPercorso(inp.percorsoEta, inp.eta + d) / 100 : r;
+    fattore *= 1 + rd;
+    P = (P + premioNetto) * (1 + rd);
+    C = tfr ? (C + flussoTfrNetto) * (1 + rd) : C * (1 + rd);
   }
   const capitaleLordo = P + C;
 
@@ -141,5 +152,6 @@ export function calcolaPreventivo(inp: InputPreventivo): RisultatoPreventivo {
     premiNettiDelFisco: premiNetti,
     rendimentoStimato: Math.max(0, capitaleNetto - premiNetti),
     versamentoAnnuoTotale: inp.premioAnnuo + (tfr ? flussoTfr : 0),
+    rendimentoEquivalentePct: anni > 0 ? (Math.pow(fattore, 1 / anni) - 1) * 100 : 0,
   };
 }

@@ -49,6 +49,31 @@ describe('preventivo vs pagina originale Alleata', () => {
   }
 });
 
+describe('percorso per età vs pagina originale Alleata', () => {
+  // Pagina v26.11ai, opzione "investment" (percorso per età) con RATES impostati a mano, versione BASE.
+  it('32→67, premio 1.000, RAL 40.000, Az 4,62% / Bil 2,32% / Gar 1,5%', () => {
+    const r = calcolaPreventivo({ ...base, eta: 32, etaPensione: 67, premioAnnuo: 1000, redditoLordo: 40000, rendimentoPct: 0, annoAdesione: 2026, percorsoEta: { azionaria: 4.62, bilanciata: 2.32, garantita: 1.5 } });
+    expect(Math.round(r.capitaleLordo)).toBe(57918);
+    expect(Math.round(r.capitaleNetto)).toBe(52705);
+    expect(Math.round(r.rendita)).toBe(2635);
+    expect(Math.round(r.risparmioFiscaleTotale)).toBe(12435);
+  });
+  it('45→67, premio 3.000, RAL 60.000, Az 5,81% / Bil 2,49% / Gar 1,36%', () => {
+    const r = calcolaPreventivo({ ...base, eta: 45, etaPensione: 67, premioAnnuo: 3000, redditoLordo: 60000, rendimentoPct: 0, annoAdesione: 2026, percorsoEta: { azionaria: 5.81, bilanciata: 2.49, garantita: 1.36 } });
+    expect(Math.round(r.capitaleLordo)).toBe(82525);
+    expect(Math.round(r.capitaleNetto)).toBe(71879);
+    expect(Math.round(r.rendita)).toBe(3594);
+    expect(Math.round(r.risparmioFiscaleTotale)).toBe(30050);
+  });
+  it('rendimento equivalente: con tasso costante coincide con il tasso', () => {
+    const r = calcolaPreventivo({ ...base, eta: 40, etaPensione: 67, premioAnnuo: 1000, redditoLordo: 40000, rendimentoPct: 4, annoAdesione: 2026 });
+    expect(r.rendimentoEquivalentePct).toBeCloseTo(4, 6);
+  });
+  it('il percorso non richiede il rendimento costante', () => {
+    expect(validaInput({ eta: 40, etaPensione: 67, premioAnnuo: 1000, redditoLordo: 30000, annoAdesione: 2026, annoCorrente: 2026, percorsoEta: { azionaria: 4, bilanciata: 3, garantita: 2 } })).toEqual([]);
+  });
+});
+
 describe('regole di base', () => {
   it('aliquota finale: 15% fino al 15° anno, -0,30 pt/anno dopo, minimo 9%', () => {
     expect(aliquotaFinale(10)).toBeCloseTo(0.15);
