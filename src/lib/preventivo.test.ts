@@ -80,6 +80,51 @@ describe('percorso per età vs pagina originale Alleata', () => {
   });
 });
 
+describe('voci aggiuntive vs pagina originale Alleata', () => {
+  // Valori letti dalla pagina (v26.11ai, BASE, rendimento "custom") eseguita in Chromium il 20/11/2026.
+  const casi = [
+    { nome: 'dipendente 48→67, premio 5.300, RAL 34.000, 1,68%', inp: { eta: 48, etaPensione: 67, premioAnnuo: 5300, redditoLordo: 34000, rendimentoPct: 1.68, annoAdesione: 2026 }, att: { alMedia: '13.80', netto: 3417, marg: '35.53', irpefMedia: '27.29', ded: '35.53', irr: '4.15', quota: 100, premiNetti: 64921 } },
+    { nome: 'con TFR', inp: { eta: 40, etaPensione: 67, premioAnnuo: 1000, redditoLordo: 40000, rendimentoPct: 4, annoAdesione: 2026, tfr: { contributoDatorePct: 2, contributoDipendentePct: 1, tfrPregresso2006: 5000, tfrPregressoDal2007: 3000, trasferimento: 2000 } }, att: { alMedia: '11.00', netto: 618, marg: '35.53', irpefMedia: '28.53', ded: '78.17', irr: '4.06', quota: 50, premiNetti: 122923 } },
+    { nome: 'autonomo 45→67, premio 5.000, reddito 30.000, adesione 2020, 3%', inp: { eta: 45, etaPensione: 67, premioAnnuo: 5000, redditoLordo: 30000, rendimentoPct: 3, annoAdesione: 2020 }, att: { alMedia: '11.10', netto: 3524, marg: '35.53', irpefMedia: '26.20', ded: '29.53', irr: '4.61', quota: 50, premiNetti: 77517 } },
+    { nome: 'reddito alto 90.000, 30→67, 5%', inp: { eta: 30, etaPensione: 67, premioAnnuo: 8000, redditoLordo: 90000, rendimentoPct: 5, annoAdesione: 2026 }, att: { alMedia: '5.96', netto: 5587, marg: '45.53', irpefMedia: '36.86', ded: '30.16', irr: '6.05', quota: 50, premiNetti: 206716 } },
+    { nome: 'vicino alla pensione 60→67: 100% in capitale', inp: { eta: 60, etaPensione: 67, premioAnnuo: 2000, redditoLordo: 30000, rendimentoPct: 1, annoAdesione: 2026 }, att: { alMedia: '15.00', netto: 1289, marg: '35.53', irpefMedia: '26.20', ded: '35.53', irr: '7.16', quota: 100, premiNetti: 9026 } },
+    { nome: 'forfettario', inp: { eta: 45, etaPensione: 67, premioAnnuo: 5000, redditoLordo: 30000, rendimentoPct: 3, annoAdesione: 2020, forfettario: true }, att: { alMedia: '0.00', netto: 5000, marg: '35.53', irpefMedia: '26.20', ded: '0.00', irr: '2.75', quota: 50, premiNetti: 110000 } },
+  ];
+  for (const c of casi) {
+    it(c.nome, () => {
+      const r = calcolaPreventivo({ ...base, forfettario: false, ...c.inp } as InputPreventivo);
+      expect(r.aliquotaMediaSuVersatoPct.toFixed(2)).toBe(c.att.alMedia);
+      expect(Math.round(r.costoNettoAnnuo)).toBe(c.att.netto);
+      expect(r.aliquotaMarginalePct.toFixed(2)).toBe(c.att.marg);
+      expect(r.aliquotaMediaIrpefPct.toFixed(2)).toBe(c.att.irpefMedia);
+      expect(r.deduzionePct.toFixed(2)).toBe(c.att.ded);
+      expect(r.rendimentoEffettivoPct?.toFixed(2)).toBe(c.att.irr);
+      expect(r.capitale.quotaMassima).toBe(c.att.quota);
+      expect(Math.round(r.premiNettiDelFisco)).toBe(c.att.premiNetti);
+    });
+  }
+  it('versamenti annui previsti con TFR (come la tabella della pagina)', () => {
+    const r = calcolaPreventivo({ ...base, ...casi[1].inp } as InputPreventivo);
+    expect(Object.fromEntries(Object.entries(r.versamenti).map(([k, v]) => [k, Math.round(v)]))).toEqual({ premio: 1000, dipendente: 400, aCaricoAderente: 1400, tfrMaturando: 2764, datore: 800, totale: 4964 });
+  });
+  it('scaglioni IRPEF fino a quello del reddito, con addizionale', () => {
+    const r = calcolaPreventivo({ ...base, ...casi[0].inp } as InputPreventivo);
+    expect(r.scaglioni.map((x) => [Math.round(x.imponibile), Math.round(x.imposta)])).toEqual([[28000, 7148], [6000, 2132]]);
+    expect(calcolaPreventivo({ ...base, ...casi[3].inp } as InputPreventivo).scaglioni).toHaveLength(3);
+  });
+  it('addizionale personalizzata: cambia imposte e risparmio fiscale', () => {
+    const a = calcolaPreventivo({ ...base, ...casi[0].inp } as InputPreventivo);
+    const b = calcolaPreventivo({ ...base, ...casi[0].inp, addizionalePct: 0 } as InputPreventivo);
+    expect(b.risparmioFiscaleAnnuo).toBeLessThan(a.risparmioFiscaleAnnuo);
+    expect(b.aliquotaMarginalePct.toFixed(2)).toBe('33.00');
+  });
+  it('limite in capitale: età corretta fuori tabella → non calcolabile', () => {
+    const r = calcolaPreventivo({ ...base, eta: 30, etaPensione: 51, premioAnnuo: 1000, redditoLordo: 30000, rendimentoPct: 2, annoAdesione: 2026 });
+    expect(r.capitale.etaCorretta).toBe(49);
+    expect(r.capitale.quotaMassima).toBeNull();
+  });
+});
+
 describe('regole di base', () => {
   it('aliquota finale: 15% fino al 15° anno, -0,30 pt/anno dopo, minimo 9%', () => {
     expect(aliquotaFinale(10)).toBeCloseTo(0.15);

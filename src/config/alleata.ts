@@ -40,6 +40,27 @@ export const ALLEATA = {
    * Bilanciata da 50 a 59, Garantita da 60 in poi. Ogni anno si usa il rendimento della linea corrispondente all'età.
    */
   percorsoEta: { sogliaBilanciata: 50, sogliaGarantita: 60 },
+  /** Assegno sociale annuo 2026. Pagina: PARAMS_ANNO.assegnoSociale (€ 7.101,12). */
+  assegnoSociale: 7101.12,
+  /**
+   * Limite per la prestazione in capitale (funzione calc() della pagina): di norma al massimo il 50% in capitale; il 100%
+   * se la rendita ricavata dal 70% del montante finale è inferiore alla metà dell'assegno sociale.
+   */
+  limiteCapitale: { quotaMontanteInRendita: 0.7, frazioneAssegnoSociale: 0.5 },
+  /**
+   * Coefficienti annui di conversione in rendita, versione BASE, per età corretta da 50 a 89 anni
+   * (pagina: ALLEATA_RENDITA_BASE; tariffa per adesioni dal 24/07/2023). ⚠️ DA VERIFICARE sulle CGA.
+   */
+  coefficientiRenditaBase: [0.0254, 0.026, 0.0267, 0.0274, 0.0281, 0.0289, 0.0298, 0.0306, 0.0316, 0.0325, 0.0336, 0.0347, 0.0359, 0.0371, 0.0384, 0.0399, 0.0414, 0.043, 0.0448, 0.0466, 0.0486, 0.0508, 0.0532, 0.0557, 0.0585, 0.0616, 0.065, 0.0686, 0.0727, 0.0771, 0.0819, 0.0872, 0.0931, 0.0996, 0.1068, 0.1147, 0.1235, 0.1332, 0.1441, 0.1561],
+  /** Correzione dell'età per anno di nascita (pagina: alleataAgeCorrection): fino al 1927 +3, 1939 +2, 1948 +1, 1960 0, 1970 −1, dopo −2. */
+  correzioneEtaPerNascita: [
+    { finoAnno: 1927, correzione: 3 },
+    { finoAnno: 1939, correzione: 2 },
+    { finoAnno: 1948, correzione: 1 },
+    { finoAnno: 1960, correzione: 0 },
+    { finoAnno: 1970, correzione: -1 },
+  ],
+  correzioneEtaAltrimenti: -2,
   /** La pagina stima la rendita come capitale netto ÷ 20 (nessun coefficiente di conversione). */
   anniRendita: 20,
   /** Con regime forfettario la pagina azzera imposta finale e risparmio fiscale. */
@@ -48,6 +69,7 @@ export const ALLEATA = {
 
 /** Note mostrate accanto ai parametri da non considerare confermati. */
 export const DA_VERIFICARE: string[] = [
+  'Limite in capitale (50% / 100%): coefficienti di conversione in rendita, correzione per anno di nascita e assegno sociale 2026 ripresi dalla pagina Alleata, non dalle CGA.',
   'Autonomo forfettario: nessun risparmio fiscale e nessuna imposta finale (regola della pagina Alleata). L’autonomo in regime ordinario ha lo stesso calcolo del dipendente, senza TFR.',
   'Percorso per età (Azionaria <50 anni, Bilanciata 50–59, Garantita da 60): ricavato dal codice della pagina Alleata, non da documentazione.',
   'Limite di deducibilità € 5.300 (L. 199/2025): citato dalla pagina Alleata, non verificato sulla norma.',
