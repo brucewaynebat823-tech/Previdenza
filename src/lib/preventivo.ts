@@ -11,6 +11,8 @@ export interface InputPreventivo {
   rendimentoPct: number;
   /** Percorso per età: rendimenti annui (in %) delle tre linee; ogni anno si usa quello della linea prevista per l'età. */
   percorsoEta?: { azionaria: number; bilanciata: number; garantita: number };
+  /** Addizionali regionali/comunali (%) da usare al posto di quella della pagina (opzionale). */
+  addizionalePct?: number;
   /** Anno di prima adesione a una forma pensionistica (per l'aliquota finale). */
   annoAdesione: number;
   /** Anno corrente (parametro per rendere il calcolo testabile). */
@@ -39,6 +41,40 @@ export interface RisultatoPreventivo {
   versamentoAnnuoTotale: number;
   /** Rendimento annuo costante equivalente (media geometrica degli anni), in %. */
   rendimentoEquivalentePct: number;
+  /** Versamenti annui previsti. */
+  versamenti: { premio: number; dipendente: number; aCaricoAderente: number; tfrMaturando: number; datore: number; totale: number };
+  /** Costo netto annuo a carico dell'aderente (premio + contributo dipendente − risparmio fiscale annuo). */
+  costoNettoAnnuo: number;
+  /** Imposta finale / totale versato (esclusi contributi oltre il limite e TFR fino al 2006), in %. */
+  aliquotaMediaSuVersatoPct: number;
+  /** Aliquote IRPEF (con addizionale) sul reddito indicato, in %. */
+  aliquotaMediaIrpefPct: number;
+  aliquotaMarginalePct: number;
+  /** Risparmio fiscale annuo / premio, in %. */
+  deduzionePct: number;
+  scaglioni: SchedaScaglione[];
+  /** Rendimento annuo composto effettivo, inclusi i vantaggi fiscali e al netto di costi e tassazione finale, in %. */
+  rendimentoEffettivoPct: number | null;
+  capitale: LimiteCapitale;
+}
+
+export interface SchedaScaglione {
+  fino: number;
+  precedente: number;
+  aliquotaIrpefPct: number;
+  addizionalePct: number;
+  imponibile: number;
+  imposta: number;
+}
+
+export interface LimiteCapitale {
+  /** 50 o 100 (% massima in capitale); null se non calcolabile (età fuori tabella). */
+  quotaMassima: 50 | 100 | null;
+  annoNascitaStimato: number;
+  etaCorretta: number;
+  coefficiente: number | null;
+  renditaSu70: number | null;
+  soglia: number;
 }
 
 /** Rendimento (%) del percorso per età all'età indicata. */
@@ -47,28 +83,42 @@ export function tassoPercorso(p: NonNullable<InputPreventivo['percorsoEta']>, et
   return eta < sogliaBilanciata ? p.azionaria : eta < sogliaGarantita ? p.bilanciata : p.garantita;
 }
 
-export function irpef(imponibile: number): number {
-  const { scaglioni, addizionale } = ALLEATA.irpef;
+const addDi = (add?: number) => (add === undefined ? ALLEATA.irpef.addizionale : add);
+
+export function irpef(imponibile: number, addizionale?: number): number {
+  return scaglioniIrpef(imponibile, addizionale).reduce((t, r) => t + r.imposta, 0);
+}
+
+/** Dettaglio per scaglione, fino a quello che contiene l'imponibile (come la pagina Alleata). */
+export function scaglioniIrpef(imponibile: number, addizionale?: number): SchedaScaglione[] {
+  const add = addDi(addizionale);
+  const righe: SchedaScaglione[] = [];
   let precedente = 0;
-  let totale = 0;
-  for (const s of scaglioni) {
+  for (const s of ALLEATA.irpef.scaglioni) {
     const parte = Math.max(0, Math.min(imponibile, s.fino) - precedente);
-    totale += parte * (s.aliquota + addizionale);
+    righe.push({ fino: s.fino, precedente, aliquotaIrpefPct: s.aliquota * 100, addizionalePct: add * 100, imponibile: parte, imposta: parte * (s.aliquota + add) });
     if (imponibile <= s.fino) break;
     precedente = s.fino;
   }
-  return totale;
+  return righe;
 }
 
-export const nettoAnnuo = (lordo: number) => Math.max(0, lordo - irpef(lordo));
+/** Aliquota marginale (IRPEF + addizionale) sul reddito indicato, come frazione. */
+export function aliquotaMarginale(imponibile: number, addizionale?: number): number {
+  const add = addDi(addizionale);
+  for (const s of ALLEATA.irpef.scaglioni) if (imponibile <= s.fino) return s.aliquota + add;
+  return 0.4553;
+}
+
+export const nettoAnnuo = (lordo: number, addizionale?: number) => Math.max(0, lordo - irpef(lordo, addizionale));
 
 /** Ricava il lordo dal netto annuo (bisezione, come la pagina). */
-export function lordoDaNetto(nettoAnnuoVal: number): number {
+export function lordoDaNetto(nettoAnnuoVal: number, addizionale?: number): number {
   let a = 0;
   let b = 1e6;
   for (let i = 0; i < 60; i++) {
     const m = (a + b) / 2;
-    if (nettoAnnuo(m) < nettoAnnuoVal) a = m;
+    if (nettoAnnuo(m, addizionale) < nettoAnnuoVal) a = m;
     else b = m;
   }
   return (a + b) / 2;
@@ -91,6 +141,40 @@ export function validaInput(i: Partial<InputPreventivo>): string[] {
   if (!num(i.annoAdesione) || i.annoAdesione! < 1990 || i.annoAdesione! > 2100) e.push("Anno di adesione: inserisci un anno valido (da 1990).");
   else if (num(i.annoCorrente) && i.annoAdesione! > i.annoCorrente!) e.push("L'anno di prima adesione non può essere successivo all'anno in corso.");
   return e;
+}
+
+/** Limite per la prestazione in capitale (regola della pagina Alleata, versione BASE). */
+export function limiteCapitale(capitaleLordo: number, eta: number, etaPensione: number, annoCorrente: number): LimiteCapitale {
+  const annoNascitaStimato = annoCorrente - Math.round(eta);
+  const corr = ALLEATA.correzioneEtaPerNascita.find((x) => annoNascitaStimato <= x.finoAnno)?.correzione ?? ALLEATA.correzioneEtaAltrimenti;
+  const etaCorretta = Math.round(etaPensione) + corr;
+  const tabella = ALLEATA.coefficientiRenditaBase;
+  const coefficiente = Number.isInteger(etaCorretta) && etaCorretta >= 50 && etaCorretta <= 49 + tabella.length ? tabella[etaCorretta - 50] : null;
+  const { quotaMontanteInRendita, frazioneAssegnoSociale } = ALLEATA.limiteCapitale;
+  const renditaSu70 = coefficiente === null ? null : capitaleLordo * quotaMontanteInRendita * coefficiente;
+  const soglia = frazioneAssegnoSociale * ALLEATA.assegnoSociale;
+  const calcolabile = renditaSu70 !== null && Number.isFinite(renditaSu70) && capitaleLordo > 0;
+  return { quotaMassima: !calcolabile ? null : renditaSu70! < soglia ? 100 : 50, annoNascitaStimato, etaCorretta, coefficiente, renditaSu70, soglia };
+}
+
+/** Rendimento annuo composto effettivo (IRR) sugli esborsi netti del vantaggio fiscale, come la pagina Alleata; in %. */
+export function rendimentoEffettivo(anni: number, esborsoAnnuo: number, iniziale: number, capitaleNetto: number): number | null {
+  const tot = esborsoAnnuo * anni + iniziale;
+  if (anni <= 0 || tot <= 0 || capitaleNetto <= 0) return null;
+  const valore = (t: number) => {
+    const n = Math.abs(t) < 1e-9 ? anni : ((1 + t) ** anni - 1) / t * (1 + t);
+    return iniziale * (1 + t) ** anni + esborsoAnnuo * n;
+  };
+  let lo = -0.99;
+  let hi = 1;
+  while (valore(hi) < capitaleNetto && hi < 10) hi *= 2;
+  if (valore(hi) < capitaleNetto || valore(lo) > capitaleNetto) return null;
+  for (let k = 0; k < 200; k++) {
+    const m = (lo + hi) / 2;
+    if (valore(m) < capitaleNetto) lo = m;
+    else hi = m;
+  }
+  return ((lo + hi) / 2) * 100;
 }
 
 /** Calcolo del preventivo, trascrizione della funzione calc() della pagina Alleata (BASE, senza coperture). */
@@ -134,10 +218,16 @@ export function calcolaPreventivo(inp: InputPreventivo): RisultatoPreventivo {
   const impostaFinale = Math.max(0, capitaleLordo - nonDedotto - quotaSeparata) * aliquota;
   const capitaleNetto = capitaleLordo - impostaFinale;
 
-  const risparmioAnnuo = inp.forfettario ? 0 : irpef(inp.redditoLordo) - irpef(Math.max(0, inp.redditoLordo - dedotto));
+  const add = inp.addizionalePct === undefined ? undefined : inp.addizionalePct / 100;
+  const risparmioAnnuo = inp.forfettario ? 0 : irpef(inp.redditoLordo, add) - irpef(Math.max(0, inp.redditoLordo - dedotto), add);
   const risparmioTotale = risparmioAnnuo * anni;
   const premiVersati = (inp.premioAnnuo + (tfr ? flussoTfr : 0)) * anni + iniziale;
   const premiNetti = Math.max(0, premiVersati - risparmioTotale);
+
+  const premio = inp.premioAnnuo;
+  const aCarico = premio + (tfr ? dipendenteAnnuo : 0);
+  const totaleAnnuo = premio + (tfr ? flussoTfr : 0);
+  const baseImponibile = Math.max(0, premiVersati - nonDedotto - pre2006);
 
   return {
     anni,
@@ -153,5 +243,14 @@ export function calcolaPreventivo(inp: InputPreventivo): RisultatoPreventivo {
     rendimentoStimato: Math.max(0, capitaleNetto - premiNetti),
     versamentoAnnuoTotale: inp.premioAnnuo + (tfr ? flussoTfr : 0),
     rendimentoEquivalentePct: anni > 0 ? (Math.pow(fattore, 1 / anni) - 1) * 100 : 0,
+    versamenti: { premio, dipendente: tfr ? dipendenteAnnuo : 0, aCaricoAderente: aCarico, tfrMaturando: tfr ? tfrMaturando : 0, datore: tfr ? datoreAnnuo : 0, totale: totaleAnnuo },
+    costoNettoAnnuo: aCarico - risparmioAnnuo,
+    aliquotaMediaSuVersatoPct: premiVersati > 0 ? (aliquota * 100 * baseImponibile) / premiVersati : 0,
+    aliquotaMediaIrpefPct: inp.redditoLordo > 0 ? (irpef(inp.redditoLordo, add) / inp.redditoLordo) * 100 : 0,
+    aliquotaMarginalePct: aliquotaMarginale(inp.redditoLordo, add) * 100,
+    deduzionePct: premio > 0 ? (risparmioAnnuo / premio) * 100 : 0,
+    scaglioni: scaglioniIrpef(inp.redditoLordo, add),
+    rendimentoEffettivoPct: rendimentoEffettivo(anni, totaleAnnuo - risparmioAnnuo, iniziale, capitaleNetto),
+    capitale: limiteCapitale(capitaleLordo, inp.eta, inp.etaPensione, inp.annoCorrente),
   };
 }

@@ -56,3 +56,30 @@ nav button{display:flex;flex-direction:column;align-items:center;gap:2px}.ico{fo
 .riepilogo{display:grid;gap:2px;font-size:13px;background:#f4f7fc;border-radius:10px;padding:8px 10px;margin:6px 0 10px}
 .scelta{margin:12px 0 0}.campo select{margin-top:2px}
 .elenco{list-style:none;margin:8px 0;padding:0;display:grid;gap:8px}.elenco li{border:1px solid var(--bd);border-radius:10px;padding:8px 10px;display:grid;gap:2px;font-size:14px}.elenco a{font-weight:700;color:var(--az)}
+/* Preventivo: struttura a sezioni come nella pagina Alleata */
+.sezione{background:#fff;border:1px solid var(--bd);border-radius:14px;margin:12px 0;overflow:hidden}
+.sezTesta{display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%;background:var(--blu);color:#fff;padding:11px 12px;font-weight:800;font-size:17px;border:0;border-radius:0;text-align:left;min-height:48px}
+.sezTesta .pill{margin-left:auto;font-size:12px;font-weight:700;padding:3px 10px;border-radius:999px;background:#7a1f12;color:#fff}.sezTesta .pill.arancio{background:#e07a10}.sezTesta .freccia{font-size:12px}
+.sezCorpo{padding:12px}
+.sezCorpo h4{margin:14px 0 6px;font-size:15px}
+.dueCol{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.riquadro{border-left:4px solid var(--az);background:#f1f6ff;border-radius:8px;padding:8px 10px;margin:10px 0;font-size:14px}.riquadro.verde{border-color:#0fa968;background:#effaf4}
+.tiles{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:4px 0 10px}
+.tile{border:2px solid;border-radius:12px;padding:10px 8px;text-align:center;display:grid;gap:2px;align-content:start}
+.tile.arancio{border-color:#e08a1e;background:#fff9f0}.tile.verde{border-color:#1fa267;background:#f1fbf6}
+.tile span{font-size:11.5px;letter-spacing:.3px;color:#40506b;font-weight:700}.tile b{font-size:24px}.tile.arancio b{color:#c76a00}.tile.verde b{color:#0f8a55}
+.tile em{font-style:normal;font-weight:700;color:#0f8a55;font-size:14px}.tile small{color:#51607a}
+.tile .limite{color:#c0392b;font-weight:700;font-size:13px}
+.vantaggio{display:flex;justify-content:space-between;align-items:center;gap:8px;background:#effaf4;border:1px solid #bfe8d3;border-radius:12px;padding:10px 12px;margin:8px 0}
+.vantaggio b.v{font-size:26px;color:#0f8a55}.vantaggio .t{font-weight:800}.vantaggio small{display:block}
+.costoNetto{display:flex;justify-content:space-between;gap:8px;background:#f4f7fc;border-radius:10px;padding:8px 12px;font-weight:700;margin:6px 0}.costoNetto.neg{background:#fdecec;color:#b42318}
+.tabVoci th{font-size:11px;color:var(--mu);text-transform:uppercase}.tabVoci td small{display:block}.tabVoci tr.tot td{font-weight:800;border-top:2px solid var(--bd)}.tabVoci tr.sub td{background:#f4f7fc;font-weight:700}
+.coppia{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.cardTorta{border:1px solid var(--bd);border-radius:12px;padding:8px;text-align:center;display:grid;gap:6px;justify-items:center;align-content:start}
+.cardTorta h5{margin:0;font-size:14px}.torta{width:100%;max-width:140px;height:auto}
+.leg{display:grid;gap:2px;font-size:12.5px;width:100%;text-align:left}.leg div{display:flex;justify-content:space-between;gap:6px}.leg .p{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:5px}
+.opzioni{display:grid;grid-template-columns:1fr 1fr;gap:8px}.opzione{border:1px solid var(--bd);border-radius:10px;padding:8px;background:#f8faff;font-size:13px;display:grid;gap:3px}.opzione b{font-size:13.5px}.opzione .tassa{justify-self:end;background:#e3ecff;color:var(--blu);font-weight:800;border-radius:999px;padding:1px 9px;font-size:12px}.opzione small{color:#475569}
+.gruppoOpz{font-size:12px;font-weight:800;color:var(--mu);text-transform:uppercase;margin:10px 0 4px}
+.piede{font-size:12px;color:var(--mu);font-style:italic;line-height:1.45}
+@media(max-width:380px){.tiles,.coppia,.opzioni{grid-template-columns:1fr}}
+.vantaggio b.v{white-space:nowrap}.costoNetto{flex-wrap:wrap}.costoNetto span:last-child{white-space:nowrap}

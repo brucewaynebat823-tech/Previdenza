@@ -73,7 +73,7 @@ export function App() {
         {scheda === 'comb' && <Combinata dati={dati} vaiAiDati={vaiAiDati} />}
         {scheda === 'prev' && <Preventivo dati={dati} />}
         {scheda === 'dati' && <Dati dati={dati} avviso={avviso} onImporta={importa} onRimuovi={rimuovi} onAzzera={azzera} haDatiUtente={haDatiUtente} />}
-        <Avviso />
+        {scheda !== 'prev' && <Avviso />}
       </main>
       <nav aria-label="Sezioni">
         {SCHEDE.map((s) => (
