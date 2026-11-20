@@ -31,5 +31,5 @@ export const RIFORMA_2026: { gruppo: string; opzioni: OpzioneRiforma[] }[] = [
     ],
   },
 ];
-export const NOTA_RIFORMA =
-  'Sintesi divulgativa — D.Lgs. 252/2005 e Legge di Bilancio 2026. Aliquota 15→9% = riduzione 0,30%/anno oltre il 15° anno di adesione, minimo 9%. Operatività al recepimento dei fondi secondo COVIP.';
+/** Spiegazione dell'aliquota "15→9%" (regola indicata nel prospetto del progetto, in config con le altre aliquote). */
+export const NOTA_RIFORMA = 'Aliquota 15→9%: 15% ridotta di 0,30 punti per ogni anno oltre il 15° anno di adesione, minimo 9%.';

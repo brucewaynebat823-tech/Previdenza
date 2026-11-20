@@ -69,14 +69,14 @@ export const ALLEATA = {
 
 /** Note mostrate accanto ai parametri da non considerare confermati. */
 export const DA_VERIFICARE: string[] = [
-  'Limite in capitale (50% / 100%): coefficienti di conversione in rendita, correzione per anno di nascita e assegno sociale 2026 ripresi dalla pagina Alleata, non dalle CGA.',
-  'Autonomo forfettario: nessun risparmio fiscale e nessuna imposta finale (regola della pagina Alleata). L’autonomo in regime ordinario ha lo stesso calcolo del dipendente, senza TFR.',
-  'Percorso per età (Azionaria <50 anni, Bilanciata 50–59, Garantita da 60): ricavato dal codice della pagina Alleata, non da documentazione.',
-  'Limite di deducibilità € 5.300 (L. 199/2025): citato dalla pagina Alleata, non verificato sulla norma.',
-  'Rendita stimata = capitale netto ÷ 20: semplificazione della pagina, non è un calcolo attuariale.',
-  'Reddito lordo ricavato dal netto con le sole aliquote IRPEF e addizionale (senza contributi INPS né detrazioni), come fa la pagina.',
-  'Scaglioni IRPEF 2026 e addizionale 2,53%: ripresi dalla pagina, non verificati.',
-  'Clausola di salvaguardia e costi del trasferimento: la pagina non contiene regole di calcolo.',
+  'Limite in capitale (50% / 100%): coefficienti di conversione in rendita, correzione per anno di nascita e assegno sociale 2026, da verificare sulle CGA.',
+  'Autonomo forfettario: nessun risparmio fiscale e nessuna imposta finale; l’autonomo in regime ordinario ha lo stesso calcolo del dipendente, senza TFR. Da verificare sulla norma.',
+  'Percorso per età (Azionaria sotto i 50 anni, Bilanciata 50–59, Garantita da 60): regola non verificata su documentazione.',
+  'Limite di deducibilità € 5.300 (L. 199/2025): non verificato sulla norma.',
+  'Rendita stimata = capitale netto ÷ 20: semplificazione, non è un calcolo attuariale.',
+  'Reddito lordo ricavato dal netto con le sole aliquote IRPEF e addizionale, senza contributi INPS né detrazioni.',
+  'Scaglioni IRPEF 2026 e addizionale 2,53%: non verificati.',
+  'Clausola di salvaguardia e costi del trasferimento: nessuna regola di calcolo disponibile, sono trattati come importi iniziali.',
 ];
 
 /**

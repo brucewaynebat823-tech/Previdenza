@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { DatasetCovip } from '../data/tipi';
-import { ALLEATA, DA_VERIFICARE, FONTE_ALLEATA, PRUDENZA } from '../config/alleata';
+import { ALLEATA, DA_VERIFICARE, PRUDENZA } from '../config/alleata';
 import { calcolaPreventivo, lordoDaNetto, validaInput, type InputPreventivo } from '../lib/preventivo';
 import { RIFORMA_2026, NOTA_RIFORMA } from '../config/riforma2026';
 import { Sezione } from './preventivo/Sezione';
@@ -248,8 +248,8 @@ export function Preventivo({ dati }: { dati: DatasetCovip }) {
           </label>
           {campo('annoAdesione', 'Anno 1° adesione (FP)', 'anno')}
         </div>
-        {forfettario && <p className="nota">Regime forfettario: come nella pagina Alleata, nessun risparmio fiscale e nessuna imposta finale sulle prestazioni. ⚠️ DA VERIFICARE.</p>}
-        {s.tipo === 'aut' && <p className="nota">Autonomo in regime ordinario: il risparmio fiscale si calcola sul reddito che indichi, con IRPEF e addizionale della pagina Alleata (senza TFR).</p>}
+        {forfettario && <p className="nota">Regime forfettario: nessun risparmio fiscale e nessuna imposta finale sulle prestazioni. ⚠️ DA VERIFICARE.</p>}
+        {s.tipo === 'aut' && <p className="nota">Autonomo in regime ordinario: il risparmio fiscale si calcola sul reddito che indichi, con IRPEF e addizionale (senza TFR).</p>}
 
         {s.fondo === 'libera' && <div className="dueCol">{campo('libera', 'Rendimento annuo ipotizzato (%)', 'numero')}</div>}
         {s.fondo && s.fondo !== 'libera' && (
@@ -269,7 +269,7 @@ export function Preventivo({ dati }: { dati: DatasetCovip }) {
               <p className="nota">Con più di {PRUDENZA.orizzonteOltreCuiSoloStoricoLungo} anni di versamenti si può usare solo il periodo storico più lungo disponibile (ultimi {piuLungo} anni): scelta di prudenza dell’app, per non estendere a lungo termine la media di pochi anni.</p>
             )}
             {s.fondo === 'eta' && (
-              <p className="nota">Percorso per età (come nella pagina Alleata): Azionaria fino a {ALLEATA.percorsoEta.sogliaBilanciata - 1} anni, Bilanciata da {ALLEATA.percorsoEta.sogliaBilanciata} a {ALLEATA.percorsoEta.sogliaGarantita - 1}, Garantita da {ALLEATA.percorsoEta.sogliaGarantita}.</p>
+              <p className="nota">Percorso per età: Azionaria fino a {ALLEATA.percorsoEta.sogliaBilanciata - 1} anni, Bilanciata da {ALLEATA.percorsoEta.sogliaBilanciata} a {ALLEATA.percorsoEta.sogliaGarantita - 1}, Garantita da {ALLEATA.percorsoEta.sogliaGarantita}.</p>
             )}
             {s.fondo === 'mix' && (
               <div className="griglia tre">
@@ -305,7 +305,7 @@ export function Preventivo({ dati }: { dati: DatasetCovip }) {
             </label>
             {s.tfr && (
               <>
-                <p className="nota">TFR maturando = RAL × {pct(ALLEATA.tfrQuota * 100)} (parametro della pagina Alleata).</p>
+                <p className="nota">TFR maturando = RAL × {pct(ALLEATA.tfrQuota * 100)}.</p>
                 <div className="griglia">
                   {campo('datore', 'Contributo datoriale', 'valore', unita('datoreUnita'))}
                   {campo('dip', 'Contributo dipendente', 'valore', unita('dipUnita'))}
@@ -358,7 +358,7 @@ export function Preventivo({ dati }: { dati: DatasetCovip }) {
                 </div>
               </div>
               <p className="nota">
-                Limite in capitale: {r.capitale.quotaMassima === 100 ? 'la rendita sul 70% del montante è inferiore alla metà dell’assegno sociale, quindi si può avere fino al 100% in capitale' : r.capitale.quotaMassima === 50 ? 'di norma al massimo il 50% in capitale' : 'non calcolabile per questa età'} ⚠️ DA VERIFICARE (regola e coefficienti ripresi dalla pagina Alleata).
+                Limite in capitale: {r.capitale.quotaMassima === 100 ? 'la rendita sul 70% del montante è inferiore alla metà dell’assegno sociale, quindi si può avere fino al 100% in capitale' : r.capitale.quotaMassima === 50 ? 'di norma al massimo il 50% in capitale' : 'non calcolabile per questa età'} ⚠️ DA VERIFICARE (regola e coefficienti non controllati sulle CGA).
               </p>
 
               <div className="vantaggio">
@@ -405,7 +405,7 @@ export function Preventivo({ dati }: { dati: DatasetCovip }) {
                   ))}
                 </tbody>
               </table>
-              <p className="nota"><b>Aliquote:</b> media {pct(r.aliquotaMediaIrpefPct)}, marginale {pct(r.aliquotaMarginalePct)}, deduzione {pct(r.deduzionePct)} del premio. Addizionale {pct(addUsata)} {input.addizionalePct === undefined ? '(parametro della pagina Alleata ⚠️ DA VERIFICARE)' : '(indicata da te)'}.</p>
+              <p className="nota"><b>Aliquote:</b> media {pct(r.aliquotaMediaIrpefPct)}, marginale {pct(r.aliquotaMarginalePct)}, deduzione {pct(r.deduzionePct)} del premio. Addizionale {pct(addUsata)} {input.addizionalePct === undefined ? '(parametro ⚠️ DA VERIFICARE)' : '(indicata da te)'}.</p>
 
               {(scenariLinea.length > 1 || sensibilita.length > 1) && (
                 <>
@@ -482,11 +482,10 @@ export function Preventivo({ dati }: { dati: DatasetCovip }) {
           <div className="piede">
             <p>{AVVISO_LEGALE}</p>
             <p>
-              Simulazione del {dataOggi} · Alleata Previdenza · Ipotesi: {NOME_FONDO[s.fondo]}, rendimento annuo {s.fondo === 'eta' ? `medio equivalente ${pct(rendimentoUsato)}` : pct(rendimentoUsato)}
+              Ipotesi usate ({dataOggi}): {NOME_FONDO[s.fondo]}, rendimento annuo {s.fondo === 'eta' ? `medio equivalente ${pct(rendimentoUsato)}` : pct(rendimentoUsato)}
               {s.fondo !== 'libera' && s.periodo ? ` (media COVIP ultimi ${s.periodo} anni${periodoTesto ? `, ${periodoTesto}` : ''})` : ''}; età {input.eta} → {input.etaPensione}; premio {eur(input.premioAnnuo)}; reddito lordo {eur(input.redditoLordo)}
               {s.tipo === 'dip' ? ` (da stipendio netto ${numero(s.netto) ?? 0} € × ${s.mensilita})` : s.tipo === 'forf' ? ' (forfettario: nessuna imposta finale né risparmio fiscale)' : ' (autonomo)'}; adesione {input.annoAdesione}; addizionali {pct(addUsata)};
               {input.tfr ? ` con TFR (datore ${pct(input.tfr.contributoDatorePct)}, dipendente ${pct(input.tfr.contributoDipendentePct)} della RAL);` : ''} deducibilità massima {eur(ALLEATA.maxDeducibile)}/anno; imposta finale sulle prestazioni 15% ridotta di 0,30 punti/anno oltre il 15° (minimo 9%); caricamento {pct(ALLEATA.caricamento * 100)}.
-              Valori indicativi e non contrattuali: i rendimenti passati non sono garanzia di quelli futuri. Fonte regole: pagina Alleata v{FONTE_ALLEATA.versionePagina}, letta il {FONTE_ALLEATA.dataLettura}.
             </p>
           </div>
         )}
@@ -542,7 +541,7 @@ export function Preventivo({ dati }: { dati: DatasetCovip }) {
           </div>
         ))}
         <p className="piede">{NOTA_RIFORMA}</p>
-        <p className="warn">⚠️ DA VERIFICARE: contenuti ripresi dalla pagina Alleata (v{FONTE_ALLEATA.versionePagina}), non controllati sulle norme.</p>
+        <p className="warn">⚠️ DA VERIFICARE: schede riassuntive non controllate sulle norme vigenti.</p>
       </Sezione>
 
       <section className="card">
