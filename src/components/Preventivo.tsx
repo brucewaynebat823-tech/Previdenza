@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { DatasetCovip } from '../data/tipi';
 import { ALLEATA, DA_VERIFICARE, PRUDENZA } from '../config/alleata';
-import { calcolaPreventivo, lordoDaNetto, validaInput, type InputPreventivo } from '../lib/preventivo';
+import { analisiSensibilita, calcolaPreventivo, lordoDaNetto, premioPerRendita, validaInput, valoreInEuroDiOggi, type InputPreventivo } from '../lib/preventivo';
+import { cancellaScenari, leggiScenari, scriviScenari, type ScenarioSalvato } from '../lib/scenari';
 import { RIFORMA_2026, NOTA_RIFORMA } from '../config/riforma2026';
 import { Sezione } from './preventivo/Sezione';
 import { Torta } from './preventivo/Torta';
@@ -21,12 +22,12 @@ interface Stato {
   annoAdesione: string;
   tfr: boolean; datore: string; datoreUnita: '%' | '€'; dip: string; dipUnita: '%' | '€';
   pre2006: string; dal2007: string; trasf: string;
-  addizionale: string;
+  addizionale: string; aumentoPremio: string; inflazione: string; obiettivo: string;
 }
 const VUOTO: Stato = {
   eta: '', etaPensione: '', premio: '', tipo: '', netto: '', mensilita: '', lordoForf: '',
   fondo: '', periodo: '', libera: '', mixG: '', mixB: '', mixA: '', annoAdesione: '',
-  tfr: false, datore: '', datoreUnita: '%', dip: '', dipUnita: '%', pre2006: '', dal2007: '', trasf: '', addizionale: '',
+  tfr: false, datore: '', datoreUnita: '%', dip: '', dipUnita: '%', pre2006: '', dal2007: '', trasf: '', addizionale: '', aumentoPremio: '', inflazione: '', obiettivo: '',
 };
 
 export function Preventivo({ dati }: { dati: DatasetCovip }) {
@@ -40,6 +41,10 @@ export function Preventivo({ dati }: { dati: DatasetCovip }) {
   const forfettario = s.tipo === 'forf';
   const [vedi, setVedi] = useState(false);
   const [altre, setAltre] = useState(false);
+  const [avanzate, setAvanzate] = useState(false);
+  const [nomeScenario, setNomeScenario] = useState('');
+  const [scenari, setScenari] = useState<ScenarioSalvato[]>(leggiScenari);
+  const [confrontati, setConfrontati] = useState<string[]>([]);
   const [periodoStorico, setPeriodoStorico] = useState<Periodo>('5');
   const esito = useRef<HTMLDivElement>(null);
   const set = <K extends keyof Stato>(k: K, v: Stato[K]) => setS((p) => ({ ...p, [k]: v }));
@@ -88,6 +93,13 @@ export function Preventivo({ dati }: { dati: DatasetCovip }) {
     const addN = num(s.addizionale);
     const addPct = addN !== null && addN >= 0 && addN <= 10 ? addN : undefined;
     if (s.addizionale.trim() !== '' && addPct === undefined) err.push('Addizionale: inserisci una percentuale tra 0 e 10.');
+    const aumN = num(s.aumentoPremio);
+    const aumPct = aumN !== null && aumN >= 0 && aumN <= 10 ? aumN : undefined;
+    if (s.aumentoPremio.trim() !== '' && aumPct === undefined) err.push('Aumento annuo del premio: inserisci una percentuale tra 0 e 10.');
+    const inflN = num(s.inflazione);
+    if (s.inflazione.trim() !== '' && (inflN === null || inflN < 0 || inflN > 15)) err.push('Inflazione: inserisci una percentuale tra 0 e 15.');
+    const obN = num(s.obiettivo);
+    if (s.obiettivo.trim() !== '' && (obN === null || obN <= 0)) err.push('Rendita desiderata: inserisci un importo maggiore di zero.');
     let rl: number | null = null;
     if (!s.tipo) err.push('Scegli il tipo di reddito: dipendente, autonomo o autonomo forfettario.');
     if (autonomo) rl = num(s.lordoForf);
@@ -117,7 +129,7 @@ export function Preventivo({ dati }: { dati: DatasetCovip }) {
     const inp: Partial<InputPreventivo> = {
       eta: num(s.eta) ?? undefined, etaPensione: num(s.etaPensione) ?? undefined, premioAnnuo: num(s.premio) ?? undefined,
       redditoLordo: rl ?? undefined, forfettario, rendimentoPct: rend?.rendimentoPct, percorsoEta: rend?.percorsoEta,
-      annoAdesione: num(s.annoAdesione) ?? undefined, annoCorrente, addizionalePct: addPct,
+      annoAdesione: num(s.annoAdesione) ?? undefined, annoCorrente, addizionalePct: addPct, aumentoPremioPct: aumPct,
       tfr: s.tfr && !autonomo ? { contributoDatorePct: conv(s.datore, s.datoreUnita), contributoDipendentePct: conv(s.dip, s.dipUnita), tfrPregresso2006: num(s.pre2006) ?? 0, tfrPregressoDal2007: num(s.dal2007) ?? 0, trasferimento: num(s.trasf) ?? 0 } : undefined,
     };
     const base = validaInput(inp).filter((m) => s.fondo === 'libera' || !m.startsWith('Rendimento annuo'));
@@ -141,22 +153,48 @@ export function Preventivo({ dati }: { dati: DatasetCovip }) {
   );
 
   async function esporta(tipo: 'png' | 'pdf') {
-    if (!esito.current) return;
+    const el = esito.current;
+    if (!el) return;
     const html2canvas = (await import('html2canvas')).default;
-    const cv = await html2canvas(esito.current, { scale: 2, backgroundColor: '#ffffff' });
+    const SC = 2;
+    const cv = await html2canvas(el, { scale: SC, backgroundColor: '#ffffff', windowWidth: 820 });
     if (tipo === 'png') {
       const a = document.createElement('a');
       a.href = cv.toDataURL('image/png');
       a.download = 'preventivo-stima.png';
       a.click();
-    } else {
-      const { jsPDF } = await import('jspdf');
-      const pdf = new jsPDF({ unit: 'pt', format: 'a4' });
-      const w = pdf.internal.pageSize.getWidth() - 40;
-      const h = (cv.height * w) / cv.width;
-      pdf.addImage(cv.toDataURL('image/jpeg', 0.9), 'JPEG', 20, 20, w, Math.min(h, pdf.internal.pageSize.getHeight() - 40));
-      pdf.save('preventivo-stima.pdf');
+      return;
     }
+    const { jsPDF } = await import('jspdf');
+    const pdf = new jsPDF({ unit: 'pt', format: 'a4' });
+    const larg = pdf.internal.pageSize.getWidth() - 40;
+    const alt = pdf.internal.pageSize.getHeight() - 40;
+    const scala = larg / cv.width;
+    const altPx = Math.floor(alt / scala);
+    // Punti dove si può andare a capo senza tagliare un elemento: l'inizio di blocchi e titoli.
+    const base = el.getBoundingClientRect().top;
+    const stacchi = Array.from(el.querySelectorAll('.sezione, .tiles, .vantaggio, h4, table, .costoNetto, .coppia, .cardTorta, svg.grafico, .riquadro, .piede, p.nota'))
+      .map((x) => Math.round((x.getBoundingClientRect().top - base) * SC))
+      .filter((v) => v > 0)
+      .sort((a, b) => a - b);
+    let y = 0;
+    for (let pag = 0; y < cv.height; pag++) {
+      const limite = y + altPx;
+      let fine = Math.min(cv.height, limite);
+      if (limite < cv.height) {
+        const adatti = stacchi.filter((v) => v > y + altPx * 0.4 && v <= limite);
+        if (adatti.length) fine = adatti[adatti.length - 1];
+      }
+      const h = fine - y;
+      const parte = document.createElement('canvas');
+      parte.width = cv.width;
+      parte.height = h;
+      parte.getContext('2d')!.drawImage(cv, 0, y, cv.width, h, 0, 0, cv.width, h);
+      if (pag > 0) pdf.addPage();
+      pdf.addImage(parte.toDataURL('image/jpeg', 0.9), 'JPEG', 20, 20, larg, h * scala);
+      y = fine;
+    }
+    pdf.save('preventivo-stima.pdf');
   }
 
   const rendimentoUsato = r ? (input.percorsoEta ? r.rendimentoEquivalentePct : input.rendimentoPct) : undefined;
@@ -204,6 +242,46 @@ export function Preventivo({ dati }: { dati: DatasetCovip }) {
     .map((x) => ({ nome: x.nome, colore: coloriLinea[x.k], punti: Array.from({ length: nStorico + 1 }, (_, i) => 100 * Math.pow(1 + x.v! / 100, i)) }));
 
   const addUsata = input?.addizionalePct ?? ALLEATA.irpef.addizionale * 100;
+  const inflN = numero(s.inflazione);
+  const reale = r && inflN !== null && inflN >= 0 ? { capitale: valoreInEuroDiOggi(r.capitaleNetto, inflN, r.anni), rendita: valoreInEuroDiOggi(r.rendita, inflN, r.anni), inflazione: inflN } : null;
+  const obiettivoN = numero(s.obiettivo);
+  const premioObiettivo = pronto && r && obiettivoN !== null && obiettivoN > 0 ? premioPerRendita(input, obiettivoN) : undefined;
+  const sensib = pronto && r ? analisiSensibilita(input) : [];
+  const renditaCoeff = r && r.capitale.coefficiente !== null ? r.capitaleLordo * r.capitale.coefficiente : null;
+
+  const salvaScenario = () => {
+    if (!r) return;
+    const nuovo: ScenarioSalvato = {
+      id: Date.now().toString(36),
+      nome: nomeScenario.trim() || `Preventivo del ${new Date().toLocaleDateString('it-IT')}`,
+      salvatoIl: new Date().toISOString().slice(0, 10),
+      stato: { ...s },
+      sintesi: { eta: input.eta, etaPensione: input.etaPensione, anni: r.anni, premio: input.premioAnnuo, fondo: NOME_FONDO[s.fondo], rendimentoPct: rendimentoUsato ?? 0, capitaleLordo: r.capitaleLordo, capitaleNetto: r.capitaleNetto, rendita: r.rendita, premiVersati: r.premiVersati, risparmioFiscaleTotale: r.risparmioFiscaleTotale },
+    };
+    const l = [nuovo, ...scenari];
+    setScenari(l);
+    scriviScenari(l);
+    setNomeScenario('');
+  };
+  const eliminaScenario = (id: string) => {
+    const l = scenari.filter((x) => x.id !== id);
+    setScenari(l);
+    scriviScenari(l);
+    setConfrontati((c) => c.filter((x) => x !== id));
+  };
+  const caricaScenario = (sc: ScenarioSalvato) => setS({ ...VUOTO, ...(sc.stato as Partial<Stato>) } as Stato);
+  const confronto = confrontati.map((id) => scenari.find((x) => x.id === id)).filter((x): x is ScenarioSalvato => !!x);
+  const scaricaCsv = () => {
+    if (!r) return;
+    const n2 = (v: number) => v.toFixed(2).replace('.', ',');
+    const righe = [['Anno', 'Età', 'Premio', 'Versamenti cumulati', 'Capitale lordo'], ...r.serie.map((x) => [String(annoCorrente + x.anno), String(input.eta + x.anno), n2(x.premio), n2(x.versamenti), n2(x.capitale)])];
+    const blob = new Blob(['\uFEFF' + righe.map((x) => x.join(';')).join('\n')], { type: 'text/csv;charset=utf-8' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'preventivo-anno-per-anno.csv';
+    a.click();
+    URL.revokeObjectURL(a.href);
+  };
   const dataOggi = new Date().toLocaleDateString('it-IT');
   const quotaTesto = r ? (r.capitale.quotaMassima === null ? 'verifica con il fondo' : `max ${r.capitale.quotaMassima}% in capitale`) : '';
   const costoNegativo = r ? Math.round(r.costoNettoAnnuo) < 0 : false;
@@ -323,7 +401,18 @@ export function Preventivo({ dati }: { dati: DatasetCovip }) {
             )}
           </>
         )}
-        <div className="dueCol">{campo('addizionale', 'Addizionali IRPEF % (facoltativo)', `vuoto = ${pct(ALLEATA.irpef.addizionale * 100)}`)}</div>
+        <button className="sec" onClick={() => setAvanzate(!avanzate)}>{avanzate ? 'Nascondi' : 'Mostra'} opzioni avanzate (facoltative)</button>
+        {avanzate && (
+          <>
+            <div className="dueCol">
+              {campo('addizionale', 'Addizionali IRPEF %', `vuoto = ${pct(ALLEATA.irpef.addizionale * 100)}`)}
+              {campo('aumentoPremio', 'Aumento annuo del premio %', 'vuoto = 0')}
+              {campo('inflazione', 'Inflazione annua % (euro di oggi)', 'vuoto = non usata')}
+              {campo('obiettivo', 'Rendita netta desiderata (€/anno)', 'es. importo')}
+            </div>
+            <p className="nota">Opzioni facoltative: se lasci vuoto il calcolo resta quello base. L’inflazione e la rendita desiderata sono ipotesi tue, non dati.</p>
+          </>
+        )}
       </Sezione>
 
       <div ref={esito}>
@@ -365,6 +454,26 @@ export function Preventivo({ dati }: { dati: DatasetCovip }) {
               <p className="nota">
                 Limite in capitale: {r.capitale.quotaMassima === 100 ? 'la rendita sul 70% del montante è inferiore alla metà dell’assegno sociale, quindi si può avere fino al 100% in capitale' : r.capitale.quotaMassima === 50 ? 'di norma al massimo il 50% in capitale' : 'non calcolabile per questa età'} ⚠️ DA VERIFICARE (regola e coefficienti non controllati sulle CGA).
               </p>
+
+              {renditaCoeff !== null && (
+                <p className="nota">
+                  <b>Rendita da coefficiente di conversione</b> [Stima]: circa {eur(renditaCoeff)} l’anno lordi (capitale lordo × coefficiente {pct(r.capitale.coefficiente! * 100)} a età corretta {r.capitale.etaCorretta}), prima delle imposte. ⚠️ DA VERIFICARE sulle CGA. Alternativa alla stima semplificata “netto ÷ {ALLEATA.anniRendita}”.
+                </p>
+              )}
+              {reale && (
+                <div className="riquadro">
+                  <b>In euro di oggi</b> (inflazione {pct(reale.inflazione)} l’anno, ipotesi tua): capitale netto <b>{eur(reale.capitale)}</b> · rendita <b>{eur(reale.rendita)}</b> l’anno.
+                </div>
+              )}
+              {!forfettario && (
+                <p className="nota">
+                  {r.deducibilita.nonDedottiAnnui > 0
+                    ? `⚠️ Dei contributi annui (${eur(r.deducibilita.contributiAnnui)}) la parte oltre ${eur(ALLEATA.maxDeducibile)}, cioè ${eur(r.deducibilita.nonDedottiAnnui)} l’anno, non è deducibile.`
+                    : r.deducibilita.residuo > 0
+                      ? `Margine di deducibilità: puoi ancora dedurre ${eur(r.deducibilita.residuo)} l’anno; con contributi fino a ${eur(ALLEATA.maxDeducibile)} il risparmio fiscale annuo sarebbe ${eur(r.deducibilita.risparmioSeResiduoUsato)} (ora ${eur(r.risparmioFiscaleAnnuo)}).`
+                      : `Sfrutti per intero il limite di deducibilità di ${eur(ALLEATA.maxDeducibile)} l’anno.`}
+                </p>
+              )}
 
               <div className="vantaggio">
                 <div>
@@ -514,6 +623,118 @@ export function Preventivo({ dati }: { dati: DatasetCovip }) {
         </div>
       )}
 
+      {pronto && r && (
+        <Sezione titolo="Analisi avanzate" badge="obiettivo · e se…" apribile apertaDi={false}>
+          <h4>Obiettivo di rendita</h4>
+          {obiettivoN === null || obiettivoN <= 0 ? (
+            <p className="nota">Inserisci la rendita netta annua che vorresti nelle “opzioni avanzate” dei Dati cliente: l’app calcola il premio annuo necessario.</p>
+          ) : premioObiettivo === null ? (
+            <p className="warn">Una rendita netta stimata di {eur(obiettivoN)} l’anno non è raggiungibile con questi dati nemmeno con premi di € 200.000 l’anno.</p>
+          ) : (
+            <div className="riquadro verde">
+              Per una rendita netta stimata di <b>{eur(obiettivoN)}</b> l’anno servirebbe un premio annuo di circa <b>{eur(premioObiettivo ?? 0)}</b> ({eur((premioObiettivo ?? 0) / 12)} al mese), contro i {eur(input.premioAnnuo)} attuali. [Stima] stessa ipotesi di rendimento e stesse regole; rendita come “netto ÷ {ALLEATA.anniRendita}”.
+            </div>
+          )}
+
+          <h4>E se… (analisi di sensibilità)</h4>
+          <p className="nota">Cosa cambia al variare di una sola ipotesi. Non sono previsioni.</p>
+          <table>
+            <thead>
+              <tr><th>Scenario</th><th className="n">Capitale netto</th><th className="n">Differenza</th></tr>
+            </thead>
+            <tbody>
+              {sensib.map((x) => (
+                <tr key={x.etichetta}>
+                  <td>{x.etichetta}</td>
+                  <td className="n">{eur(x.capitaleNetto)}</td>
+                  <td className="n" style={{ color: x.differenza < 0 ? '#b42318' : '#0f8a55' }}>{x.differenza > 0 ? '+' : x.differenza < 0 ? '−' : ''}{eur(Math.abs(x.differenza))}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+
+          <h4>Dettaglio anno per anno</h4>
+          <div className="scroll" style={{ maxHeight: 280, overflowY: 'auto' }}>
+            <table>
+              <thead>
+                <tr><th>Anno</th><th className="n">Età</th><th className="n">Premio</th><th className="n">Versato</th><th className="n">Capitale lordo</th></tr>
+              </thead>
+              <tbody>
+                {r.serie.map((x) => (
+                  <tr key={x.anno}>
+                    <td>{x.anno === 0 ? 'oggi' : annoCorrente + x.anno}</td>
+                    <td className="n">{input.eta + x.anno}</td>
+                    <td className="n">{x.anno === 0 ? '—' : eur(x.premio)}</td>
+                    <td className="n">{eur(x.versamenti)}</td>
+                    <td className="n">{eur(x.capitale)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <button className="sec" onClick={scaricaCsv}>Scarica la tabella (CSV per Excel)</button>
+        </Sezione>
+      )}
+
+      <Sezione titolo="Preventivi salvati" badge={`${scenari.length}`} apribile apertaDi={false}>
+        <p className="nota">Salva i preventivi per ritrovarli e confrontarli. Restano solo su questo dispositivo, compreso il nome che scegli (ad esempio quello del cliente).</p>
+        {pronto && r && (
+          <div className="dueCol">
+            <label className="campo">
+              <span>Nome (facoltativo)</span>
+              <input placeholder="es. Preventivo 1" value={nomeScenario} onChange={(e) => setNomeScenario(e.target.value)} />
+            </label>
+            <button onClick={salvaScenario} style={{ alignSelf: 'end' }}>Salva questo preventivo</button>
+          </div>
+        )}
+        {!scenari.length && <p className="nota">Nessun preventivo salvato.</p>}
+        <ul className="elenco">
+          {scenari.map((x) => (
+            <li key={x.id}>
+              <b>{x.nome}</b>
+              <small>{new Date(x.salvatoIl).toLocaleDateString('it-IT')} · {x.sintesi.fondo} · capitale netto {eur(x.sintesi.capitaleNetto)} · rendita {eur(x.sintesi.rendita)}/anno</small>
+              <label className="check piccolo">
+                <input type="checkbox" checked={confrontati.includes(x.id)} disabled={!confrontati.includes(x.id) && confrontati.length >= 3} onChange={(e) => setConfrontati((c) => (e.target.checked ? [...c, x.id] : c.filter((y) => y !== x.id)))} /> Confronta
+              </label>
+              <div className="azioni">
+                <button className="sec" onClick={() => caricaScenario(x)}>Carica</button>
+                <button className="sec" onClick={() => confirm('Eliminare questo preventivo salvato?') && eliminaScenario(x.id)}>Elimina</button>
+              </div>
+            </li>
+          ))}
+        </ul>
+        {confronto.length >= 2 && (
+          <>
+            <h4>Confronto (massimo 3)</h4>
+            <div className="scroll">
+              <table>
+                <thead>
+                  <tr><th></th>{confronto.map((x) => <th key={x.id} className="n">{x.nome}</th>)}</tr>
+                </thead>
+                <tbody>
+                  {([
+                    ['Fondo', (x: ScenarioSalvato) => x.sintesi.fondo],
+                    ['Rendimento annuo', (x: ScenarioSalvato) => pct(x.sintesi.rendimentoPct)],
+                    ['Età → pensione', (x: ScenarioSalvato) => `${x.sintesi.eta} → ${x.sintesi.etaPensione}`],
+                    ['Premio annuo', (x: ScenarioSalvato) => eur(x.sintesi.premio)],
+                    ['Premi versati', (x: ScenarioSalvato) => eur(x.sintesi.premiVersati)],
+                    ['Capitale lordo', (x: ScenarioSalvato) => eur(x.sintesi.capitaleLordo)],
+                    ['Capitale netto', (x: ScenarioSalvato) => eur(x.sintesi.capitaleNetto)],
+                    ['Rendita annua', (x: ScenarioSalvato) => eur(x.sintesi.rendita)],
+                    ['Risparmio fiscale', (x: ScenarioSalvato) => eur(x.sintesi.risparmioFiscaleTotale)],
+                  ] as const).map(([et, f]) => (
+                    <tr key={et}>
+                      <td>{et}</td>
+                      {confronto.map((x) => <td key={x.id} className="n">{f(x)}</td>)}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
+        )}
+      </Sezione>
+
       <Sezione titolo="Andamento e storico rendimenti" badge="dati COVIP" apribile apertaDi>
         <label className="campo">
           <span>Periodo</span>
@@ -576,7 +797,7 @@ export function Preventivo({ dati }: { dati: DatasetCovip }) {
         <button className="sec" onClick={() => setVedi(!vedi)}>{vedi ? 'Nascondi' : 'Mostra'} parametri da verificare ⚠️</button>
         {vedi && <ul className="errori">{DA_VERIFICARE.map((d) => <li key={d}>⚠️ DA VERIFICARE · {d}</li>)}</ul>}
         <p className="nota">I dati inseriti restano salvati solo su questo dispositivo.</p>
-        <button className="pericolo" onClick={() => { if (confirm('Cancellare tutti i dati inseriti su questo dispositivo?')) { cancella(); setS(VUOTO); } }}>Cancella i miei dati</button>
+        <button className="pericolo" onClick={() => { if (confirm('Cancellare tutti i dati inseriti e i preventivi salvati su questo dispositivo?')) { cancella(); cancellaScenari(); setScenari([]); setConfrontati([]); setS(VUOTO); } }}>Cancella i miei dati</button>
       </section>
     </>
   );
