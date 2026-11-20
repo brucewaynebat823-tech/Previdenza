@@ -56,6 +56,8 @@ export interface RisultatoPreventivo {
   /** Rendimento annuo composto effettivo, inclusi i vantaggi fiscali e al netto di costi e tassazione finale, in %. */
   rendimentoEffettivoPct: number | null;
   capitale: LimiteCapitale;
+  /** Evoluzione anno per anno: versamenti cumulati e capitale lordo (anno 0 = oggi). */
+  serie: { anno: number; versamenti: number; capitale: number }[];
 }
 
 export interface SchedaScaglione {
@@ -200,11 +202,13 @@ export function calcolaPreventivo(inp: InputPreventivo): RisultatoPreventivo {
   let P = 0;
   let C = iniziale;
   let fattore = 1;
+  const serie: RisultatoPreventivo['serie'] = [{ anno: 0, versamenti: iniziale, capitale: iniziale }];
   for (let d = 0; d < anni; d++) {
     const rd = inp.percorsoEta ? tassoPercorso(inp.percorsoEta, inp.eta + d) / 100 : r;
     fattore *= 1 + rd;
     P = (P + premioNetto) * (1 + rd);
     C = tfr ? (C + flussoTfrNetto) * (1 + rd) : C * (1 + rd);
+    serie.push({ anno: d + 1, versamenti: iniziale + (inp.premioAnnuo + (tfr ? flussoTfr : 0)) * (d + 1), capitale: P + C });
   }
   const capitaleLordo = P + C;
 
@@ -252,5 +256,6 @@ export function calcolaPreventivo(inp: InputPreventivo): RisultatoPreventivo {
     scaglioni: scaglioniIrpef(inp.redditoLordo, add),
     rendimentoEffettivoPct: rendimentoEffettivo(anni, totaleAnnuo - risparmioAnnuo, iniziale, capitaleNetto),
     capitale: limiteCapitale(capitaleLordo, inp.eta, inp.etaPensione, inp.annoCorrente),
+    serie,
   };
 }

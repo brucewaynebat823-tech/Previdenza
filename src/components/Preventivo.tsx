@@ -5,6 +5,7 @@ import { calcolaPreventivo, lordoDaNetto, validaInput, type InputPreventivo } fr
 import { RIFORMA_2026, NOTA_RIFORMA } from '../config/riforma2026';
 import { Sezione } from './preventivo/Sezione';
 import { Torta } from './preventivo/Torta';
+import { GraficoLinee } from './preventivo/GraficoLinee';
 import { carica, salva, cancella, numero } from '../lib/archivio';
 import { lineaAlleata, valore } from '../lib/stats';
 import { eur, pct, dataIt } from '../lib/formati';
@@ -197,6 +198,10 @@ export function Preventivo({ dati }: { dati: DatasetCovip }) {
     return { k, nome: NOME_FONDO[k], v, cumulato: v === null ? null : (Math.pow(1 + v / 100, nStorico) - 1) * 100 };
   });
   const periodoStoricoTesto = dati.file['PIP:rend']?.periodi?.[nStorico];
+  const coloriLinea = { g: '#31b57a', b: '#4f8ef7', a: '#e08a3c' } as const;
+  const grafStorico = storico
+    .filter((x) => x.v !== null)
+    .map((x) => ({ nome: x.nome, colore: coloriLinea[x.k], punti: Array.from({ length: nStorico + 1 }, (_, i) => 100 * Math.pow(1 + x.v! / 100, i)) }));
 
   const addUsata = input?.addizionalePct ?? ALLEATA.irpef.addizionale * 100;
   const dataOggi = new Date().toLocaleDateString('it-IT');
@@ -475,6 +480,17 @@ export function Preventivo({ dati }: { dati: DatasetCovip }) {
                 <small><b>Rendimento annuo composto effettivo: {r.rendimentoEffettivoPct === null ? 'n.d.' : pct(r.rendimentoEffettivoPct)}</b><br />inclusi vantaggi fiscali e al netto di tutti i costi e della tassazione finale sul dedotto</small>
               </div>
             </div>
+            <h4>Come cresce il capitale · {r.anni} anni [Stima]</h4>
+            <GraficoLinee
+              descrizione="Versamenti cumulati e capitale lordo anno per anno"
+              formato="euro"
+              etichetteX={r.serie.map((x) => `+${x.anno}`).map((t, i) => (i === 0 ? 'oggi' : t + ' anni'))}
+              serie={[
+                { nome: 'Versamenti cumulati', colore: '#4f8ef7', punti: r.serie.map((x) => x.versamenti) },
+                { nome: 'Capitale lordo', colore: '#e0a030', punti: r.serie.map((x) => x.capitale) },
+              ]}
+            />
+            <p className="nota">Il capitale cresce soprattutto negli ultimi anni perché il rendimento si calcola su una somma già accumulata. Proiezione al rendimento ipotizzato, non una previsione.</p>
           </Sezione>
         )}
 
@@ -498,7 +514,7 @@ export function Preventivo({ dati }: { dati: DatasetCovip }) {
         </div>
       )}
 
-      <Sezione titolo="Storico rendimenti" badge="dati COVIP" apribile apertaDi={false}>
+      <Sezione titolo="Andamento e storico rendimenti" badge="dati COVIP" apribile apertaDi>
         <label className="campo">
           <span>Periodo</span>
           <select value={periodoStorico} onChange={(e) => setPeriodoStorico(e.target.value as Periodo)} aria-label="Periodo dello storico">
@@ -523,6 +539,18 @@ export function Preventivo({ dati }: { dati: DatasetCovip }) {
           </tbody>
         </table>
         <p className="nota">Il cumulato è ricavato dalla media annua composta (stima). Dati mancanti sono segnati “n.d.”: nessuna stima.</p>
+        {grafStorico.length > 0 && (
+          <>
+            <h4>Crescita di 100 € negli ultimi {nStorico} anni [Stima]</h4>
+            <GraficoLinee
+              descrizione="Crescita di 100 euro a rendimento medio annuo costante per le tre linee"
+              formato="indice"
+              etichetteX={Array.from({ length: nStorico + 1 }, (_, i) => (i === 0 ? (periodoStoricoTesto?.split('-')[0] ?? 'inizio') : i === nStorico ? (periodoStoricoTesto?.split('-').pop() ?? 'oggi') : ''))}
+              serie={grafStorico}
+            />
+            <p className="warn">Ricostruzione a rendimento medio annuo costante (dato COVIP), non l’andamento reale anno per anno. Rendimento storico, non previsione.</p>
+          </>
+        )}
       </Sezione>
 
       <Sezione titolo="Opzioni con Riforma 2026" badge="Novità" tono="arancio" apribile apertaDi={false}>

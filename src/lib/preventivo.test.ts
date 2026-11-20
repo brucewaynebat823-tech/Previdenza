@@ -125,6 +125,19 @@ describe('voci aggiuntive vs pagina originale Alleata', () => {
   });
 });
 
+describe('serie annuale del capitale', () => {
+  it("parte da oggi e arriva a capitale lordo e premi versati finali", () => {
+    const r = calcolaPreventivo({ ...base, eta: 40, etaPensione: 67, premioAnnuo: 3000, redditoLordo: 40000, rendimentoPct: 4, annoAdesione: 2026 });
+    expect(r.serie).toHaveLength(28);
+    expect(r.serie[0]).toEqual({ anno: 0, versamenti: 0, capitale: 0 });
+    const ultimo = r.serie[r.serie.length - 1];
+    expect(ultimo.anno).toBe(27);
+    expect(Math.round(ultimo.capitale)).toBe(Math.round(r.capitaleLordo));
+    expect(Math.round(ultimo.versamenti)).toBe(Math.round(r.premiVersati));
+    expect(r.serie[1].capitale).toBeCloseTo(3000 * 0.97 * 1.04, 6);
+  });
+});
+
 describe('regole di base', () => {
   it('aliquota finale: 15% fino al 15° anno, -0,30 pt/anno dopo, minimo 9%', () => {
     expect(aliquotaFinale(10)).toBeCloseTo(0.15);
