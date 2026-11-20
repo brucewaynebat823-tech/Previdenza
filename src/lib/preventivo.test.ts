@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { calcolaPreventivo, irpef, lordoDaNetto, nettoAnnuo, aliquotaFinale, validaInput, type InputPreventivo } from './preventivo';
+import { analisiSensibilita, premioPerRendita, valoreInEuroDiOggi, calcolaPreventivo, irpef, lordoDaNetto, nettoAnnuo, aliquotaFinale, validaInput, type InputPreventivo } from './preventivo';
 
 /**
  * Valori di riferimento: ottenuti il 19/11/2026 eseguendo la pagina originale
@@ -129,12 +129,49 @@ describe('serie annuale del capitale', () => {
   it("parte da oggi e arriva a capitale lordo e premi versati finali", () => {
     const r = calcolaPreventivo({ ...base, eta: 40, etaPensione: 67, premioAnnuo: 3000, redditoLordo: 40000, rendimentoPct: 4, annoAdesione: 2026 });
     expect(r.serie).toHaveLength(28);
-    expect(r.serie[0]).toEqual({ anno: 0, versamenti: 0, capitale: 0 });
+    expect(r.serie[0]).toEqual({ anno: 0, premio: 0, versamenti: 0, capitale: 0 });
     const ultimo = r.serie[r.serie.length - 1];
     expect(ultimo.anno).toBe(27);
     expect(Math.round(ultimo.capitale)).toBe(Math.round(r.capitaleLordo));
     expect(Math.round(ultimo.versamenti)).toBe(Math.round(r.premiVersati));
     expect(r.serie[1].capitale).toBeCloseTo(3000 * 0.97 * 1.04, 6);
+  });
+});
+
+describe('funzioni oltre la pagina di riferimento', () => {
+  const b = { ...base, eta: 40, etaPensione: 67, premioAnnuo: 3000, redditoLordo: 40000, rendimentoPct: 4, annoAdesione: 2026 };
+  it('premio che aumenta: capitale senza imposte né rendimento = somma dei premi netti del caricamento', () => {
+    const r = calcolaPreventivo({ ...b, eta: 40, etaPensione: 43, rendimentoPct: 0, premioAnnuo: 1000, aumentoPremioPct: 3, forfettario: true });
+    expect(r.capitaleLordo).toBeCloseTo((1000 + 1030 + 1060.9) * 0.97, 6);
+    expect(r.premiVersati).toBeCloseTo(1000 + 1030 + 1060.9, 6);
+    expect(r.serie.map((x) => Math.round(x.premio))).toEqual([0, 1000, 1030, 1061]);
+  });
+  it('aumento a zero = comportamento della pagina; con aumento il capitale cresce', () => {
+    expect(calcolaPreventivo({ ...b, aumentoPremioPct: 0 }).capitaleNetto).toBeCloseTo(calcolaPreventivo(b).capitaleNetto, 8);
+    expect(calcolaPreventivo({ ...b, aumentoPremioPct: 2 }).capitaleNetto).toBeGreaterThan(calcolaPreventivo(b).capitaleNetto);
+  });
+  it('premio per una rendita obiettivo: calcolo inverso', () => {
+    const p = premioPerRendita(b, 10000)!;
+    expect(calcolaPreventivo({ ...b, premioAnnuo: p }).rendita).toBeCloseTo(10000, 2);
+    expect(premioPerRendita(b, 1e9)).toBeNull();
+    expect(premioPerRendita(b, 0)).toBe(0);
+  });
+  it('euro di oggi', () => {
+    expect(valoreInEuroDiOggi(110, 10, 1)).toBeCloseTo(100, 8);
+    expect(valoreInEuroDiOggi(100, 0, 20)).toBe(100);
+  });
+  it('sensibilità: rendimento e premio più alti danno più capitale; pensione prima ne dà meno', () => {
+    const base0 = calcolaPreventivo(b).capitaleNetto;
+    const sc = Object.fromEntries(analisiSensibilita(b).map((x) => [x.etichetta, x]));
+    expect(sc['Rendimento +1 punto'].capitaleNetto).toBeGreaterThan(base0);
+    expect(sc['Rendimento −2 punti'].capitaleNetto).toBeLessThan(base0);
+    expect(sc['Pensione 2 anni prima'].differenza).toBeLessThan(0);
+    expect(sc['Premio +10%'].differenza).toBeGreaterThan(0);
+    expect(analisiSensibilita({ ...b, eta: 66, etaPensione: 67 }).some((x) => x.etichetta === 'Pensione 2 anni prima')).toBe(false);
+  });
+  it('deducibilità: residuo e parte non deducibile', () => {
+    expect(calcolaPreventivo({ ...b, premioAnnuo: 3000 }).deducibilita).toMatchObject({ residuo: 2300, nonDedottiAnnui: 0, dedotti: 3000 });
+    expect(calcolaPreventivo({ ...b, premioAnnuo: 6000 }).deducibilita).toMatchObject({ residuo: 0, nonDedottiAnnui: 700, dedotti: 5300 });
   });
 });
 

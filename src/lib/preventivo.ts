@@ -11,7 +11,9 @@ export interface InputPreventivo {
   rendimentoPct: number;
   /** Percorso per età: rendimenti annui (in %) delle tre linee; ogni anno si usa quello della linea prevista per l'età. */
   percorsoEta?: { azionaria: number; bilanciata: number; garantita: number };
-  /** Addizionali regionali/comunali (%) da usare al posto di quella della pagina (opzionale). */
+  /** Aumento annuo del premio (%), facoltativo: il premio dell'anno d è premio × (1 + aumento)^d. */
+  aumentoPremioPct?: number;
+  /** Addizionali regionali/comunali (%) da usare al posto di quella di default (opzionale). */
   addizionalePct?: number;
   /** Anno di prima adesione a una forma pensionistica (per l'aliquota finale). */
   annoAdesione: number;
@@ -57,7 +59,9 @@ export interface RisultatoPreventivo {
   rendimentoEffettivoPct: number | null;
   capitale: LimiteCapitale;
   /** Evoluzione anno per anno: versamenti cumulati e capitale lordo (anno 0 = oggi). */
-  serie: { anno: number; versamenti: number; capitale: number }[];
+  serie: { anno: number; premio: number; versamenti: number; capitale: number }[];
+  /** Margine di deducibilità: contributi deducibili del primo anno e importo ancora deducibile fino al limite. */
+  deducibilita: { contributiAnnui: number; dedotti: number; residuo: number; nonDedottiAnnui: number; risparmioSeResiduoUsato: number };
 }
 
 export interface SchedaScaglione {
@@ -159,13 +163,18 @@ export function limiteCapitale(capitaleLordo: number, eta: number, etaPensione: 
   return { quotaMassima: !calcolabile ? null : renditaSu70! < soglia ? 100 : 50, annoNascitaStimato, etaCorretta, coefficiente, renditaSu70, soglia };
 }
 
-/** Rendimento annuo composto effettivo (IRR) sugli esborsi netti del vantaggio fiscale, come la pagina Alleata; in %. */
-export function rendimentoEffettivo(anni: number, esborsoAnnuo: number, iniziale: number, capitaleNetto: number): number | null {
-  const tot = esborsoAnnuo * anni + iniziale;
+/**
+ * Rendimento annuo composto effettivo (IRR) sugli esborsi netti del vantaggio fiscale: un esborso all'inizio di ogni anno
+ * (`esborsi[d]`), più l'importo iniziale, contro il capitale netto finale. Con esborsi costanti coincide con la formula della pagina Alleata. In %.
+ */
+export function rendimentoEffettivo(esborsi: number[], iniziale: number, capitaleNetto: number): number | null {
+  const anni = esborsi.length;
+  const tot = esborsi.reduce((a, b) => a + b, 0) + iniziale;
   if (anni <= 0 || tot <= 0 || capitaleNetto <= 0) return null;
   const valore = (t: number) => {
-    const n = Math.abs(t) < 1e-9 ? anni : ((1 + t) ** anni - 1) / t * (1 + t);
-    return iniziale * (1 + t) ** anni + esborsoAnnuo * n;
+    let v = iniziale * (1 + t) ** anni;
+    for (let d = 0; d < anni; d++) v += esborsi[d] * (1 + t) ** (anni - d);
+    return v;
   };
   let lo = -0.99;
   let hi = 1;
@@ -179,13 +188,15 @@ export function rendimentoEffettivo(anni: number, esborsoAnnuo: number, iniziale
   return ((lo + hi) / 2) * 100;
 }
 
-/** Calcolo del preventivo, trascrizione della funzione calc() della pagina Alleata (BASE, senza coperture). */
+/** Calcolo del preventivo (versione BASE, senza coperture). Con aumento del premio a zero coincide con la funzione calc() della pagina Alleata. */
 export function calcolaPreventivo(inp: InputPreventivo): RisultatoPreventivo {
   const A = ALLEATA;
   const r = (inp.rendimentoPct ?? 0) / 100;
   const anni = Math.max(0, inp.etaPensione - inp.eta);
   const usaTfr = !!inp.tfr && !inp.forfettario;
   const tfr = usaTfr ? inp.tfr! : undefined;
+  const aum = (inp.aumentoPremioPct ?? 0) / 100;
+  const add = inp.addizionalePct === undefined ? undefined : inp.addizionalePct / 100;
 
   const tfrMaturando = inp.redditoLordo * A.tfrQuota;
   const datoreAnnuo = tfr ? (inp.redditoLordo * tfr.contributoDatorePct) / 100 : 0;
@@ -195,26 +206,38 @@ export function calcolaPreventivo(inp: InputPreventivo): RisultatoPreventivo {
   const trasf = tfr?.trasferimento ?? 0;
   const iniziale = pre2006 + dal2007 + trasf;
   const flussoTfr = tfr ? tfrMaturando + datoreAnnuo + dipendenteAnnuo : 0;
-
-  const premioNetto = inp.premioAnnuo * (1 - A.caricamento);
   const flussoTfrNetto = flussoTfr * (1 - A.caricamento);
+  const tt = tfr ? datoreAnnuo + dipendenteAnnuo : 0;
+  const premioDi = (d: number) => inp.premioAnnuo * (1 + aum) ** d;
+  const risparmioDedotto = (ded: number) => (inp.forfettario ? 0 : irpef(inp.redditoLordo, add) - irpef(Math.max(0, inp.redditoLordo - ded), add));
 
   let P = 0;
   let C = iniziale;
   let fattore = 1;
-  const serie: RisultatoPreventivo['serie'] = [{ anno: 0, versamenti: iniziale, capitale: iniziale }];
+  let versati = iniziale;
+  let nonDedotto = 0;
+  let risparmioTotale = 0;
+  let premiTotali = 0;
+  const esborsi: number[] = [];
+  const serie: RisultatoPreventivo['serie'] = [{ anno: 0, premio: 0, versamenti: iniziale, capitale: iniziale }];
   for (let d = 0; d < anni; d++) {
+    const premio = premioDi(d);
     const rd = inp.percorsoEta ? tassoPercorso(inp.percorsoEta, inp.eta + d) / 100 : r;
     fattore *= 1 + rd;
-    P = (P + premioNetto) * (1 + rd);
+    P = (P + premio * (1 - A.caricamento)) * (1 + rd);
     C = tfr ? (C + flussoTfrNetto) * (1 + rd) : C * (1 + rd);
-    serie.push({ anno: d + 1, versamenti: iniziale + (inp.premioAnnuo + (tfr ? flussoTfr : 0)) * (d + 1), capitale: P + C });
+    const contributi = premio + tt;
+    const dedotto = Math.min(contributi, A.maxDeducibile);
+    nonDedotto += Math.max(0, contributi - dedotto);
+    const risparmio = risparmioDedotto(dedotto);
+    risparmioTotale += risparmio;
+    premiTotali += premio;
+    versati += premio + flussoTfr;
+    esborsi.push(premio + flussoTfr - risparmio);
+    serie.push({ anno: d + 1, premio, versamenti: versati, capitale: P + C });
   }
   const capitaleLordo = P + C;
 
-  const contributiDedotti = inp.premioAnnuo + (tfr ? datoreAnnuo + dipendenteAnnuo : 0);
-  const dedotto = Math.min(contributiDedotti, A.maxDeducibile);
-  const nonDedotto = Math.max(0, contributiDedotti - dedotto) * anni;
   const annoFine = inp.annoCorrente + anni;
   const anniAdesione = Math.max(0, annoFine - inp.annoAdesione);
   const aliquota = inp.forfettario ? 0 : aliquotaFinale(anniAdesione);
@@ -222,10 +245,10 @@ export function calcolaPreventivo(inp: InputPreventivo): RisultatoPreventivo {
   const impostaFinale = Math.max(0, capitaleLordo - nonDedotto - quotaSeparata) * aliquota;
   const capitaleNetto = capitaleLordo - impostaFinale;
 
-  const add = inp.addizionalePct === undefined ? undefined : inp.addizionalePct / 100;
-  const risparmioAnnuo = inp.forfettario ? 0 : irpef(inp.redditoLordo, add) - irpef(Math.max(0, inp.redditoLordo - dedotto), add);
-  const risparmioTotale = risparmioAnnuo * anni;
-  const premiVersati = (inp.premioAnnuo + (tfr ? flussoTfr : 0)) * anni + iniziale;
+  const contributiPrimoAnno = inp.premioAnnuo + tt;
+  const dedottiPrimoAnno = Math.min(contributiPrimoAnno, A.maxDeducibile);
+  const risparmioAnnuo = anni > 0 ? risparmioDedotto(dedottiPrimoAnno) : 0;
+  const premiVersati = versati;
   const premiNetti = Math.max(0, premiVersati - risparmioTotale);
 
   const premio = inp.premioAnnuo;
@@ -245,7 +268,7 @@ export function calcolaPreventivo(inp: InputPreventivo): RisultatoPreventivo {
     risparmioFiscaleTotale: risparmioTotale,
     premiNettiDelFisco: premiNetti,
     rendimentoStimato: Math.max(0, capitaleNetto - premiNetti),
-    versamentoAnnuoTotale: inp.premioAnnuo + (tfr ? flussoTfr : 0),
+    versamentoAnnuoTotale: totaleAnnuo,
     rendimentoEquivalentePct: anni > 0 ? (Math.pow(fattore, 1 / anni) - 1) * 100 : 0,
     versamenti: { premio, dipendente: tfr ? dipendenteAnnuo : 0, aCaricoAderente: aCarico, tfrMaturando: tfr ? tfrMaturando : 0, datore: tfr ? datoreAnnuo : 0, totale: totaleAnnuo },
     costoNettoAnnuo: aCarico - risparmioAnnuo,
@@ -254,8 +277,68 @@ export function calcolaPreventivo(inp: InputPreventivo): RisultatoPreventivo {
     aliquotaMarginalePct: aliquotaMarginale(inp.redditoLordo, add) * 100,
     deduzionePct: premio > 0 ? (risparmioAnnuo / premio) * 100 : 0,
     scaglioni: scaglioniIrpef(inp.redditoLordo, add),
-    rendimentoEffettivoPct: rendimentoEffettivo(anni, totaleAnnuo - risparmioAnnuo, iniziale, capitaleNetto),
+    rendimentoEffettivoPct: rendimentoEffettivo(esborsi, iniziale, capitaleNetto),
     capitale: limiteCapitale(capitaleLordo, inp.eta, inp.etaPensione, inp.annoCorrente),
     serie,
+    deducibilita: {
+      contributiAnnui: contributiPrimoAnno,
+      dedotti: dedottiPrimoAnno,
+      residuo: Math.max(0, A.maxDeducibile - contributiPrimoAnno),
+      nonDedottiAnnui: Math.max(0, contributiPrimoAnno - A.maxDeducibile),
+      risparmioSeResiduoUsato: inp.forfettario ? 0 : risparmioDedotto(A.maxDeducibile),
+    },
   };
+}
+
+/** Valore in euro di oggi di un importo futuro, data un'inflazione annua ipotizzata (%). */
+export function valoreInEuroDiOggi(importo: number, inflazionePct: number, anni: number): number {
+  return importo / (1 + inflazionePct / 100) ** anni;
+}
+
+/**
+ * Premio annuo necessario per ottenere la rendita netta stimata desiderata (bisezione: la rendita cresce con il premio).
+ * Restituisce null se non è raggiungibile con premi fino a 200.000 € l'anno.
+ */
+export function premioPerRendita(inp: InputPreventivo, renditaObiettivo: number): number | null {
+  const rendita = (premio: number) => calcolaPreventivo({ ...inp, premioAnnuo: premio }).rendita;
+  const MAX = 200000;
+  if (renditaObiettivo <= rendita(0)) return 0;
+  if (rendita(MAX) < renditaObiettivo) return null;
+  let lo = 0;
+  let hi = MAX;
+  for (let i = 0; i < 80; i++) {
+    const m = (lo + hi) / 2;
+    if (rendita(m) < renditaObiettivo) lo = m;
+    else hi = m;
+  }
+  return (lo + hi) / 2;
+}
+
+export interface ScenarioSensibilita {
+  etichetta: string;
+  capitaleNetto: number;
+  differenza: number;
+  rendita: number;
+}
+
+/** Analisi "e se…": rendimento ±1 e ±2 punti, pensione 2 anni prima/dopo, premio ±10%. Non sono previsioni. */
+export function analisiSensibilita(inp: InputPreventivo): ScenarioSensibilita[] {
+  const base = calcolaPreventivo(inp).capitaleNetto;
+  const out: ScenarioSensibilita[] = [];
+  const aggiungi = (etichetta: string, v: InputPreventivo) => {
+    if (v.etaPensione <= v.eta) return;
+    const q = calcolaPreventivo(v);
+    out.push({ etichetta, capitaleNetto: q.capitaleNetto, differenza: q.capitaleNetto - base, rendita: q.rendita });
+  };
+  const conRend = (delta: number): InputPreventivo => ({
+    ...inp,
+    rendimentoPct: (inp.rendimentoPct ?? 0) + delta,
+    percorsoEta: inp.percorsoEta ? { azionaria: inp.percorsoEta.azionaria + delta, bilanciata: inp.percorsoEta.bilanciata + delta, garantita: inp.percorsoEta.garantita + delta } : undefined,
+  });
+  for (const d of [-2, -1, 1, 2]) aggiungi(`Rendimento ${d > 0 ? '+' : '−'}${Math.abs(d)} ${Math.abs(d) === 1 ? 'punto' : 'punti'}`, conRend(d));
+  aggiungi('Pensione 2 anni prima', { ...inp, etaPensione: inp.etaPensione - 2 });
+  aggiungi('Pensione 2 anni dopo', { ...inp, etaPensione: inp.etaPensione + 2 });
+  aggiungi('Premio −10%', { ...inp, premioAnnuo: inp.premioAnnuo * 0.9 });
+  aggiungi('Premio +10%', { ...inp, premioAnnuo: inp.premioAnnuo * 1.1 });
+  return out;
 }
